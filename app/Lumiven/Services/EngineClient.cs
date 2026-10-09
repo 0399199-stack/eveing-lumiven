@@ -79,7 +79,7 @@ public sealed class EngineClient(AppSettings settings, LibraryService library, s
             _http.DefaultRequestHeaders.Remove("X-Local-Auth");
             _http.DefaultRequestHeaders.Add("X-Local-Auth", _token);
             var configPath = Path.Combine(coreDirectory, "config.yaml");
-            var yaml = $"port: {port}\ndownload_dir: {JsonSerializer.Serialize(settings.DownloadDirectory)}\ndownload_concurrency: {settings.Concurrency}\ncloud_enabled: false\nradar_enabled: false\nauto_open_channels: false\nsecret_token: {_token}\nlog_file: {JsonSerializer.Serialize(Path.Combine(coreDirectory, "core.log"))}\n";
+            var yaml = $"port: {port}\ndownload_dir: {JsonSerializer.Serialize(settings.DownloadDirectory)}\ndownload_concurrency: {settings.Concurrency}\ncloud_enabled: false\nradar_enabled: false\nauto_open_channels: false\nlog_file: {JsonSerializer.Serialize(Path.Combine(coreDirectory, "core.log"))}\n";
             await File.WriteAllTextAsync(configPath, yaml, new UTF8Encoding(false));
             var args = new[] { "--desktop-managed", "--desktop-token", _token, "--desktop-parent", Environment.ProcessId.ToString(), "--desktop-data-dir", coreDirectory, "--config", configPath, "--port", port.ToString() };
             var start = new ProcessStartInfo(enginePath)
