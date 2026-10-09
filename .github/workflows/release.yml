@@ -1,7 +1,5 @@
 name: Verified Windows release
 on:
-  push:
-    tags: [v1.0.0]
   workflow_dispatch:
     inputs:
       version:
