@@ -14,7 +14,7 @@
 
 ## 使用方式
 
-Windows 10 22H2（19045）或 Windows 11，x64。安装包包含 .NET 和 Windows App SDK 运行时，无需自行安装 Go 或 .NET。
+首版仅支持 Windows 11 x64（系统版本 22000 或更新）；Windows 10 将在后续验证。安装包包含 .NET 和 Windows App SDK 运行时，无需自行安装 Go 或 .NET。
 
 1. 安装 `EVEING-Lumiven-Setup-1.0.0-x64.exe`，启动普通权限桌面程序。
 2. 在首次启用微信下载时，阅读证书、HTTPS 处理及当前用户代理的说明；主动点击启用后，后台内核以当前用户权限运行。
