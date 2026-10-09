@@ -37,9 +37,16 @@ if (-not $SkipTests) {
         if ($LASTEXITCODE -ne 0) { throw "Real core handler/Gopeed/SQLite fixture test failed at concurrency $concurrency." }
     }
 }
-& $dotnet publish (Join-Path $root 'app/Lumiven/Lumiven.csproj') -c Release -r win-x64 --self-contained true -p:Platform=x64 -p:WindowsAppSDKSelfContained=true -p:Version=$Version -o $publish
+$appProject = Join-Path $root 'app/Lumiven/Lumiven.csproj'
+& $dotnet clean $appProject -c Release -r win-x64 -p:Platform=x64
+if ($LASTEXITCODE -ne 0) { throw 'WinUI clean failed.' }
+& $dotnet publish $appProject -c Release -r win-x64 --self-contained true -p:Platform=x64 -p:WindowsAppSDKSelfContained=true -p:Version=$Version -p:DebugType=none -p:DebugSymbols=false -o $publish
 if ($LASTEXITCODE -ne 0) { throw 'WinUI publish failed.' }
 if (-not (Test-Path -LiteralPath (Join-Path $publish 'EVEING.Lumiven.exe'))) { throw 'Expected WinUI executable EVEING.Lumiven.exe missing.' }
+$pdb = Join-Path $publish 'EVEING.Lumiven.pdb'
+if (Test-Path -LiteralPath $pdb) { Remove-Item -LiteralPath $pdb -Force }
+$assembly = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes((Join-Path $publish 'EVEING.Lumiven.dll')))
+if ($assembly.Contains([Environment]::GetFolderPath('UserProfile'))) { throw 'Published WinUI DLL contains the local user path.' }
 $appOutput = Join-Path $root 'app/Lumiven/bin/x64/Release/net10.0-windows10.0.26100.0/win-x64'
 foreach ($relative in @('App.xbf', 'MainWindow.xbf', 'Themes/Glass.xbf', 'EVEING.Lumiven.pri')) {
     $source = Join-Path $appOutput $relative
