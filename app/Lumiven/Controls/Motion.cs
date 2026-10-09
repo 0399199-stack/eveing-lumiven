@@ -70,6 +70,7 @@ public static class Motion
 
     public static void Reset(FrameworkElement element)
     {
+        ElementCompositionPreview.SetIsTranslationEnabled(element, true);
         var visual = ElementCompositionPreview.GetElementVisual(element);
         visual.StopAnimation("Scale"); visual.StopAnimation("Opacity"); visual.StopAnimation("Translation");
         visual.Scale = Vector3.One; visual.Opacity = 1;
