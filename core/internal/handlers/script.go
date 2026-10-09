@@ -98,6 +98,9 @@ func (h *ScriptHandler) Handle(Conn *SunnyNet.HttpConn) bool {
 	if Conn.Response == nil || Conn.Response.Body == nil {
 		return false
 	}
+	if Conn.Response.StatusCode != http.StatusOK {
+		return false
+	}
 
 	// 读取响应体
 	// 注意：这里读取了Body，如果未被修改，需要重新赋值回去
@@ -138,13 +141,13 @@ func (h *ScriptHandler) HandleHTMLResponse(Conn *SunnyNet.HttpConn, host, path s
 
 	html := string(body)
 
-	// 添加版本号到JS引用
-	scriptReg1 := regexp.MustCompile(`src="([^"]{1,})\.js"`)
-	html = scriptReg1.ReplaceAllString(html, `src="$1.js`+h.version+`"`)
-	scriptReg2 := regexp.MustCompile(`href="([^"]{1,})\.js"`)
-	html = scriptReg2.ReplaceAllString(html, `href="$1.js`+h.version+`"`)
-	Conn.Response.Header.Set("__debug", "append_script")
-
+	// 托管模式保持微信原有模块 URL，避免同一模块因查询参数产生两个实例。
+	if cfg := h.getConfig(); cfg == nil || !cfg.DesktopManaged {
+		scriptReg1 := regexp.MustCompile(`src="([^"]{1,})\.js"`)
+		html = scriptReg1.ReplaceAllString(html, `src="$1.js`+h.version+`"`)
+		scriptReg2 := regexp.MustCompile(`href="([^"]{1,})\.js"`)
+		html = scriptReg2.ReplaceAllString(html, `href="$1.js`+h.version+`"`)
+	}
 	if host == "channels.weixin.qq.com" && (path == "/web/pages/feed" || path == "/web/pages/home" || path == "/web/pages/profile" || path == "/web/pages/account/like") {
 		// 根据页面路径注入不同的脚本
 		injectedScripts := h.buildInjectedScripts(path)
@@ -152,7 +155,7 @@ func (h *ScriptHandler) HandleHTMLResponse(Conn *SunnyNet.HttpConn, host, path s
 		utils.LogFileInfo("页面已成功加载！")
 		utils.LogFileInfo("已添加视频缓存监控和提醒功能")
 		utils.LogFileInfo("[页面加载] 视频号页面已加载 | Host=%s | Path=%s", host, path)
-		Conn.Response.Body = io.NopCloser(bytes.NewBuffer([]byte(html)))
+		setScriptResponseBody(Conn, body, html, "append_script")
 		return true
 	}
 
@@ -172,17 +175,29 @@ func (h *ScriptHandler) HandleHTMLResponse(Conn *SunnyNet.HttpConn, host, path s
 		} else {
 			html = injected + html
 		}
-		Conn.Response.Header.Set("__debug", "append_official_account_script")
 		if nonce != "" {
 			utils.LogFileInfo("[脚本注入] 公众号页面检测到 CSP nonce，已应用到采集脚本")
 		}
 		utils.LogFileInfo("[脚本注入] 公众号文章页面已注入采集脚本 | Host=%s | Path=%s", host, path)
-		Conn.Response.Body = io.NopCloser(bytes.NewBuffer([]byte(html)))
+		setScriptResponseBody(Conn, body, html, "append_official_account_script")
 		return true
 	}
 
-	Conn.Response.Body = io.NopCloser(bytes.NewBuffer([]byte(html)))
+	setScriptResponseBody(Conn, body, html, "append_script")
 	return true
+}
+
+func setScriptResponseBody(conn *SunnyNet.HttpConn, original []byte, rewritten, debug string) {
+	updated := []byte(rewritten)
+	conn.Response.Body = io.NopCloser(bytes.NewReader(updated))
+	if conn.Response.StatusCode != http.StatusOK || bytes.Equal(original, updated) {
+		return
+	}
+	conn.Response.Header.Set("__debug", debug)
+	conn.Response.Header.Set("Cache-Control", "no-store")
+	for _, name := range []string{"ETag", "Last-Modified", "Accept-Ranges", "Content-Range"} {
+		conn.Response.Header.Del(name)
+	}
 }
 
 func (h *ScriptHandler) hasOfficialAccountPage(path string) bool {
@@ -232,40 +247,41 @@ func (h *ScriptHandler) HandleJavaScriptResponse(Conn *SunnyNet.HttpConn, host, 
 
 	content := string(body)
 
-	// 添加版本号到JS引用
-	depReg := regexp.MustCompile(`"js/([^"]{1,})\.js"`)
-	fromReg := regexp.MustCompile(`from {0,1}"([^"]{1,})\.js"`)
-	lazyImportReg := regexp.MustCompile(`import\("([^"]{1,})\.js"\)`)
-	importReg := regexp.MustCompile(`import {0,1}"([^"]{1,})\.js"`)
-	content = fromReg.ReplaceAllString(content, `from"$1.js`+h.version+`"`)
-	content = depReg.ReplaceAllString(content, `"js/$1.js`+h.version+`"`)
-	content = lazyImportReg.ReplaceAllString(content, `import("$1.js`+h.version+`")`)
-	content = importReg.ReplaceAllString(content, `import"$1.js`+h.version+`"`)
-	Conn.Response.Header.Set("__debug", "replace_script")
-
+	// 托管模式不修改依赖 URL；专门的下载注入仍在下方执行。
+	if cfg := h.getConfig(); cfg == nil || !cfg.DesktopManaged {
+		depReg := regexp.MustCompile(`"js/([^"]{1,})\.js"`)
+		fromReg := regexp.MustCompile(`from {0,1}"([^"]{1,})\.js"`)
+		lazyImportReg := regexp.MustCompile(`import\("([^"]{1,})\.js"\)`)
+		importReg := regexp.MustCompile(`import {0,1}"([^"]{1,})\.js"`)
+		content = fromReg.ReplaceAllString(content, `from"$1.js`+h.version+`"`)
+		content = depReg.ReplaceAllString(content, `"js/$1.js`+h.version+`"`)
+		content = lazyImportReg.ReplaceAllString(content, `import("$1.js`+h.version+`")`)
+		content = importReg.ReplaceAllString(content, `import"$1.js`+h.version+`"`)
+	}
 	// 处理不同的JS文件
 	content, handled := h.handleIndexPublish(path, content)
 	if handled {
-		Conn.Response.Body = io.NopCloser(bytes.NewBuffer([]byte(content)))
+		setScriptResponseBody(Conn, body, content, "replace_script")
 		return true
 	}
 	content, handled = h.handleVirtualSvgIcons(path, content)
 	if handled {
-		Conn.Response.Body = io.NopCloser(bytes.NewBuffer([]byte(content)))
+		setScriptResponseBody(Conn, body, content, "replace_script")
 		return true
 	}
 
 	content, handled = h.handleWorkerRelease(path, content)
 	if handled {
-		Conn.Response.Body = io.NopCloser(bytes.NewBuffer([]byte(content)))
+		setScriptResponseBody(Conn, body, content, "replace_script")
 		return true
 	}
-	content, handled = h.handleConnectPublish(Conn, path, content)
+	content, handled = h.handleConnectPublish(path, content)
 	if handled {
+		setScriptResponseBody(Conn, body, content, "replace_script")
 		return true
 	}
 
-	Conn.Response.Body = io.NopCloser(bytes.NewBuffer([]byte(content)))
+	setScriptResponseBody(Conn, body, content, "replace_script")
 	return true
 }
 
@@ -1342,7 +1358,7 @@ func (h *ScriptHandler) handleVirtualSvgIcons(path string, content string) (stri
 	logInjectPatternResult("finderGetCommentDetail", path, feedProfileMatched)
 	if feedProfileMatched {
 		utils.LogFileInfo("[API拦截] ✅ 在virtual_svg-icons-register中成功拦截 finderGetCommentDetail 函数")
-		feedProfileReplace := `async finderGetCommentDetail($1){var result=await(async()=>{$2})();var feed=result.data.object;console.log("[API拦截] finderGetCommentDetail 触发 FeedProfileLoaded");WXU.emit(WXU.Events.FeedProfileLoaded,feed);return result;}async`
+		feedProfileReplace := `async finderGetCommentDetail($1){var result=await(async()=>{$2})();try{var feed=result.data.object;console.log("[API拦截] finderGetCommentDetail 触发 FeedProfileLoaded");WXU.emit(WXU.Events.FeedProfileLoaded,feed);}catch(_){}return result;}async`
 		content = feedProfileRegex.ReplaceAllString(content, feedProfileReplace)
 	}
 
@@ -1351,7 +1367,7 @@ func (h *ScriptHandler) handleVirtualSvgIcons(path string, content string) (stri
 	logInjectPatternResult("finderGetCommentList", path, commentListMatched)
 	if commentListMatched {
 		utils.LogFileInfo("[API拦截] ✅ 在virtual_svg-icons-register中成功拦截 finderGetCommentList 函数")
-		commentListReplace := `async finderGetCommentList($1){var result=await(async()=>{$2})();console.log("[API拦截] finderGetCommentList 返回评论列表");WXU.emit(WXU.Events.FeedCommentListLoaded,result.data);return result;}async`
+		commentListReplace := `async finderGetCommentList($1){var result=await(async()=>{$2})();try{console.log("[API拦截] finderGetCommentList 返回评论列表");WXU.emit(WXU.Events.FeedCommentListLoaded,result.data);}catch(_){}return result;}async`
 		content = commentListRegex.ReplaceAllString(content, commentListReplace)
 	}
 
@@ -1361,7 +1377,7 @@ func (h *ScriptHandler) handleVirtualSvgIcons(path string, content string) (stri
 	logInjectPatternResult("finderUserPage", path, profileListMatched)
 	if profileListMatched {
 		utils.LogFileInfo("[API拦截] ✅ 在virtual_svg-icons-register中成功拦截 finderUserPage 函数")
-		profileListReplace := `async finderUserPage($1){console.log("[Profile API] finderUserPage 调用参数:",$1);var result=await(async()=>{return$2})();console.log("[Profile API] finderUserPage 原始结果:",result);if(result&&result.data&&result.data.object){var feeds=result.data.object;console.log("[Profile API] 提取到",feeds.length,"个视频");WXU.emit(WXU.Events.UserFeedsLoaded,feeds);}else{console.warn("[Profile API] result.data.object 为空",result);}return result;}async`
+		profileListReplace := `async finderUserPage($1){var result=await(async()=>{return$2})();try{console.log("[Profile API] finderUserPage 原始结果:",result);if(result&&result.data&&result.data.object){var feeds=result.data.object;console.log("[Profile API] 提取到",feeds.length,"个视频");WXU.emit(WXU.Events.UserFeedsLoaded,feeds);}else{console.warn("[Profile API] result.data.object 为空",result);}}catch(_){}return result;}async`
 		content = profileListRegex.ReplaceAllString(content, profileListReplace)
 	}
 
@@ -1371,7 +1387,7 @@ func (h *ScriptHandler) handleVirtualSvgIcons(path string, content string) (stri
 	logInjectPatternResult("finderLiveUserPage", path, liveListMatched)
 	if liveListMatched {
 		utils.LogFileInfo("[API拦截] ✅ 在virtual_svg-icons-register中成功拦截 finderLiveUserPage 函数")
-		liveListReplace := `async finderLiveUserPage($1){console.log("[Profile API] finderLiveUserPage 调用参数:",$1);var result=await(async()=>{return$2})();console.log("[Profile API] finderLiveUserPage 原始结果:",result);if(result&&result.data&&result.data.object){var feeds=result.data.object;console.log("[Profile API] 提取到",feeds.length,"个直播回放");WXU.emit(WXU.Events.UserLiveReplayLoaded,feeds);}else{console.warn("[Profile API] result.data.object 为空",result);}return result;}async`
+		liveListReplace := `async finderLiveUserPage($1){var result=await(async()=>{return$2})();try{console.log("[Profile API] finderLiveUserPage 原始结果:",result);if(result&&result.data&&result.data.object){var feeds=result.data.object;console.log("[Profile API] 提取到",feeds.length,"个直播回放");WXU.emit(WXU.Events.UserLiveReplayLoaded,feeds);}else{console.warn("[Profile API] result.data.object 为空",result);}}catch(_){}return result;}async`
 		content = liveListRegex.ReplaceAllString(content, liveListReplace)
 	}
 
@@ -1421,7 +1437,7 @@ func (h *ScriptHandler) handleVirtualSvgIcons(path string, content string) (stri
 				apiMethodsEscaped := strings.ReplaceAll(apiMethods, "$", "$$")
 
 				// 在 export 之前插入 API 加载事件
-				jsWXAPI := ";WXU.emit(WXU.Events.APILoaded," + apiMethodsEscaped + ");export{"
+				jsWXAPI := ";try{WXU.emit(WXU.Events.APILoaded," + apiMethodsEscaped + ")}catch(_){}export{"
 				content = exportRegex.ReplaceAllString(content, jsWXAPI)
 				utils.LogFileInfo("[API拦截] ✅ 已注入 APILoaded 事件")
 			}
@@ -1470,7 +1486,7 @@ func logInjectPatternResult(label string, path string, matched bool) {
 }
 
 // handleConnectPublish 处理connect.publish JS文件（参考 wx_channels_download 项目的实现）
-func (h *ScriptHandler) handleConnectPublish(Conn *SunnyNet.HttpConn, path string, content string) (string, bool) {
+func (h *ScriptHandler) handleConnectPublish(path string, content string) (string, bool) {
 	if !util.Includes(path, "connect.publish") {
 		return content, false
 	}
@@ -1478,12 +1494,6 @@ func (h *ScriptHandler) handleConnectPublish(Conn *SunnyNet.HttpConn, path strin
 	utils.LogFileInfo("[Home数据采集] ✅ 正在处理 connect.publish 文件")
 	utils.LogFileInfo("[Home数据采集] ⏭️ 跳过 goToNextFlowFeed/goToPrevFlowFeed 重写，避免干扰新版 Home 状态机")
 
-	// 禁用浏览器缓存，确保每次都能拦截到最新的代码
-	Conn.Response.Header.Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	Conn.Response.Header.Set("Pragma", "no-cache")
-	Conn.Response.Header.Set("Expires", "0")
-
-	Conn.Response.Body = io.NopCloser(bytes.NewBuffer([]byte(content)))
 	return content, true
 }
 

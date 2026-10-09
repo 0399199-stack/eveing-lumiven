@@ -20,6 +20,23 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+func ownedCertificateInfo(certPEM []byte) ([]byte, string, error) {
+	block, _ := pem.Decode(certPEM)
+	if block == nil || block.Type != "CERTIFICATE" {
+		return nil, "", fmt.Errorf("本地证书文件无效")
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil, "", err
+	}
+	if !cert.IsCA || cert.Subject.CommonName != "EVEING Lumiven Local Proxy" ||
+		len(cert.Subject.Organization) != 1 || cert.Subject.Organization[0] != "EVEING" || cert.CheckSignatureFrom(cert) != nil {
+		return nil, "", fmt.Errorf("证书不是本软件生成的本地根证书")
+	}
+	hash := sha1.Sum(block.Bytes)
+	return block.Bytes, strings.ToUpper(hex.EncodeToString(hash[:])), nil
+}
+
 func ownedCertificateDER(certPEM, keyPEM []byte, thumbprint string) ([]byte, error) {
 	if len(thumbprint) != 40 {
 		return nil, fmt.Errorf("本地证书指纹无效")
@@ -27,26 +44,17 @@ func ownedCertificateDER(certPEM, keyPEM []byte, thumbprint string) ([]byte, err
 	if _, err := hex.DecodeString(thumbprint); err != nil {
 		return nil, fmt.Errorf("本地证书指纹无效: %w", err)
 	}
-	block, _ := pem.Decode(certPEM)
-	if block == nil || block.Type != "CERTIFICATE" {
-		return nil, fmt.Errorf("本地证书文件无效")
-	}
-	cert, err := x509.ParseCertificate(block.Bytes)
+	der, actualThumbprint, err := ownedCertificateInfo(certPEM)
 	if err != nil {
 		return nil, err
-	}
-	if !cert.IsCA || cert.Subject.CommonName != "EVEING Lumiven Local Proxy" ||
-		len(cert.Subject.Organization) != 1 || cert.Subject.Organization[0] != "EVEING" || cert.CheckSignatureFrom(cert) != nil {
-		return nil, fmt.Errorf("证书不是本软件生成的本地根证书")
 	}
 	if _, err = tls.X509KeyPair(certPEM, keyPEM); err != nil {
 		return nil, fmt.Errorf("本地证书和私钥不匹配: %w", err)
 	}
-	hash := sha1.Sum(block.Bytes)
-	if !strings.EqualFold(hex.EncodeToString(hash[:]), thumbprint) {
+	if !strings.EqualFold(actualThumbprint, thumbprint) {
 		return nil, fmt.Errorf("本地证书与接入记录不匹配")
 	}
-	return block.Bytes, nil
+	return der, nil
 }
 
 func findCertificate(store windows.Handle, hash *[sha1.Size]byte) (*windows.CertContext, error) {

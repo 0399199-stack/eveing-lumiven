@@ -65,17 +65,37 @@ var WXU = (() => {
   var WXAPI2 = {};
   var WXAPI4 = {};
 
+  function mergeAPI(target, source) {
+    const seen = new Set();
+    for (let current = source; current && current !== Object.prototype; current = Object.getPrototypeOf(current)) {
+      if (current !== source && Object.getPrototypeOf(current) === null) break;
+      for (const key of Reflect.ownKeys(current)) {
+        if (key === "constructor" || seen.has(key)) continue;
+        seen.add(key);
+        const value = source[key];
+        Object.defineProperty(target, key, {
+          value: typeof value === "function" ? value.bind(source) : value,
+          configurable: true,
+          enumerable: true,
+          writable: true,
+        });
+      }
+    }
+  }
+
   // 监听 APILoaded 事件，保存 API 函数
   WXE.onAPILoaded((variables) => {
+    if (!variables || typeof variables !== "object") return;
     console.log('[WXU] APILoaded 事件触发，变量:', variables);
     const keys = Object.keys(variables);
     for (let i = 0; i < keys.length; i++) {
       (() => {
         const variable = keys[i];
         const methods = variables[variable];
+        if (!methods || (typeof methods !== "object" && typeof methods !== "function")) return;
         // 检查是否包含评论/详情 API 函数（API 组）
-        if (typeof methods.finderGetCommentDetail === "function" || typeof methods.finderGetCommentList === "function") {
-          WXAPI = methods;
+        if (typeof methods.finderGetCommentDetail === "function" || typeof methods.finderGetCommentList === "function" || typeof methods.finderUserPage === "function") {
+          mergeAPI(WXAPI, methods);
           console.log('[WXU] ✅ WXAPI 已初始化，包含函数:', Object.keys(methods).slice(0, 10));
           return;
         }

@@ -299,7 +299,10 @@ public sealed class EngineClient(AppSettings settings, LibraryService library, s
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { break; }
             catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException or InvalidOperationException or IOException or UnauthorizedAccessException)
             {
+                if (cancellationToken.IsCancellationRequested) break;
                 bool exited = HasEngineExited();
+                // Keep watching after a timed-out stop so a later exit can restore the proxy.
+                if (_stopRequested && !exited) continue;
                 if (++failures < 3 && !exited) continue;
                 if (!exited)
                 {
@@ -316,8 +319,14 @@ public sealed class EngineClient(AppSettings settings, LibraryService library, s
                     IsRunning = false;
                     await RecoverOwnedSystemAsync();
                     CancelSession();
-                    SetStatus("failed", "下载内核已退出，原代理已恢复。可重新启用微信下载。");
-                    AppServices.Log("下载内核退出", ex);
+                    _process?.Dispose(); _process = null;
+                    _baseUri = null; _token = "";
+                    if (_stopRequested) SetStatus("disabled", "微信下载已停止，原代理已恢复");
+                    else
+                    {
+                        SetStatus("failed", "下载内核已退出，原代理已恢复。可重新启用微信下载。");
+                        AppServices.Log("下载内核退出", ex);
+                    }
                     break;
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { break; }
