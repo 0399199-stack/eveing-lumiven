@@ -168,6 +168,10 @@ func TestValidatePathInBase(t *testing.T) {
 	if err := os.WriteFile(insideFile, []byte("x"), 0644); err != nil {
 		t.Fatalf("write inside file failed: %v", err)
 	}
+	outsideFile := filepath.Join(t.TempDir(), "outside.mp4")
+	if err := os.WriteFile(outsideFile, []byte("x"), 0644); err != nil {
+		t.Fatalf("write outside file failed: %v", err)
+	}
 
 	tests := []struct {
 		name      string
@@ -196,6 +200,12 @@ func TestValidatePathInBase(t *testing.T) {
 		{
 			name:      "path outside base",
 			target:    filepath.Join(filepath.Dir(baseDir), "outside.mp4"),
+			allowDir:  false,
+			wantError: true,
+		},
+		{
+			name:      "existing file outside base",
+			target:    outsideFile,
 			allowDir:  false,
 			wantError: true,
 		},

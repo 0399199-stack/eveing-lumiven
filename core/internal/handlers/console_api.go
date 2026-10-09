@@ -1534,10 +1534,13 @@ func validatePathInBase(baseDir, targetPath string, allowDir bool) (string, erro
 		realBaseDir = absBaseDir
 	}
 
-	// Preserve the original base spelling for Windows 8.3 aliases, while also
-	// accepting paths under a resolved base. Check resolved paths below for escapes.
+	// Accept the original and resolved base spellings. On Windows the target may
+	// also use an 8.3 alias, so resolve it before rejecting a lexical mismatch.
 	if !isPathWithinBase(absBaseDir, absPath) && !isPathWithinBase(realBaseDir, absPath) {
-		return "", &pathValidationError{status: http.StatusForbidden, msg: "access to path outside downloads directory is forbidden"}
+		resolvedTarget, resolveErr := filepath.EvalSymlinks(absPath)
+		if resolveErr != nil || !isPathWithinBase(realBaseDir, resolvedTarget) {
+			return "", &pathValidationError{status: http.StatusForbidden, msg: "access to path outside downloads directory is forbidden"}
+		}
 	}
 
 	info, err := os.Stat(absPath)
