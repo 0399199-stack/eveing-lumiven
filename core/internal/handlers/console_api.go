@@ -1534,7 +1534,9 @@ func validatePathInBase(baseDir, targetPath string, allowDir bool) (string, erro
 		realBaseDir = absBaseDir
 	}
 
-	if !isPathWithinBase(realBaseDir, absPath) {
+	// Preserve the original base spelling for Windows 8.3 aliases, while also
+	// accepting paths under a resolved base. Check resolved paths below for escapes.
+	if !isPathWithinBase(absBaseDir, absPath) && !isPathWithinBase(realBaseDir, absPath) {
 		return "", &pathValidationError{status: http.StatusForbidden, msg: "access to path outside downloads directory is forbidden"}
 	}
 

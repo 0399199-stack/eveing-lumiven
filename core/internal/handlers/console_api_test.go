@@ -231,6 +231,25 @@ func TestValidatePathInBase_SymlinkEscapeBlocked(t *testing.T) {
 	}
 }
 
+func TestValidatePathInBase_BaseAlias(t *testing.T) {
+	realBaseDir := t.TempDir()
+	insideFile := filepath.Join(realBaseDir, "video.mp4")
+	if err := os.WriteFile(insideFile, []byte("x"), 0644); err != nil {
+		t.Fatalf("write inside file failed: %v", err)
+	}
+
+	aliasBaseDir := filepath.Join(t.TempDir(), "downloads-alias")
+	if err := os.Symlink(realBaseDir, aliasBaseDir); err != nil {
+		t.Skipf("directory symlink not available on this environment: %v", err)
+	}
+
+	for _, target := range []string{aliasBaseDir, filepath.Join(aliasBaseDir, "video.mp4"), realBaseDir, insideFile} {
+		if _, err := validatePathInBase(aliasBaseDir, target, true); err != nil {
+			t.Errorf("validatePathInBase(%q, %q) rejected a path within the aliased base: %v", aliasBaseDir, target, err)
+		}
+	}
+}
+
 func TestIsAllowedVideoExtension(t *testing.T) {
 	valid := []string{"a.mp4", "a.webm", "a.ogv", "a.avi", "a.mkv", "a.mov"}
 	for _, path := range valid {
