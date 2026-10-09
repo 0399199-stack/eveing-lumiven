@@ -12,6 +12,7 @@ EVEING 新增代码使用 GPL-3.0-only。免费提供是本项目的分发方式
 | SSLMate / Opsmate PKCS12 | SunnyNet 内嵌 pkcs 代码 | BSD-3-Clause，`docs/licenses/PKCS12-BSD.txt` |
 | Damian Gryski RC2 | pkcs 内嵌 RC2 实现 | MIT，`docs/licenses/RC2-MIT.txt` |
 | JSZip / Pako / FileSaver | wx_channel 原有内嵌网页保存组件 | 选择兼容的 MIT 许可，`docs/licenses/JSZip-MIT-GPL.txt`、`Pako-MIT.txt`、`FileSaver-MIT.txt` |
+| mitt | wx_channel 内嵌的 [developit/mitt](https://github.com/developit/mitt) 事件组件 | MIT，`docs/licenses/Mitt-MIT.txt` |
 | 其他 Go 模块 | `core/go.mod`、`core/go.sum` | 构建时从实际使用的模块缓存收集到 `licenses/go-modules/` |
 | .NET / Windows App SDK | `scripts/toolchain.json`、`app/Lumiven/Lumiven.csproj` | 保留发布输出与 NuGet 包中的许可文本，附于 `licenses/dotnet-packages/` |
 

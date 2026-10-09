@@ -316,14 +316,8 @@ func RecoverSystem(dir string) error {
 	if err = recoverProxy(&lease); err != nil {
 		return err
 	}
-	if lease.CertificateOwned && len(lease.Thumbprint) == 40 {
-		if _, err = hex.DecodeString(lease.Thumbprint); err != nil {
-			return err
-		}
-		_, err = runPS("$p='Cert:\\CurrentUser\\Root\\"+lease.Thumbprint+"'; if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Confirm:$false -ErrorAction SilentlyContinue }; if (Test-Path -LiteralPath $p) { throw '无法移除本软件安装的证书' }", true)
-		if err != nil {
-			return err
-		}
+	if err = removeOwnedCertificate(dir, &lease); err != nil {
+		return err
 	}
 	if err = os.Remove(path); os.IsNotExist(err) {
 		return nil

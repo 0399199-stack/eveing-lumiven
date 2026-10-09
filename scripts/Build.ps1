@@ -21,10 +21,13 @@ $env:DOTNET_NOLOGO = '1'
 if (-not $SkipTests) {
     & $dotnet run --project (Join-Path $root 'app/Lumiven.SmokeTests/Lumiven.SmokeTests.csproj') -c Release
     if ($LASTEXITCODE -ne 0) { throw 'Actual shell service and media library smoke tests failed.' }
+    $injectTests = @(Get-ChildItem -LiteralPath (Join-Path $root 'core/internal/assets/inject') -Filter '*.test.js' -File | ForEach-Object FullName)
+    & $node --test @injectTests
+    if ($LASTEXITCODE -ne 0) { throw 'WeChat injection tests failed.' }
 }
 Push-Location (Join-Path $root 'core')
 try {
-    if (-not $SkipTests) { & $go test -tags nosqlite ./internal/desktop/... ./internal/storage/... ./internal/handlers/...; if ($LASTEXITCODE -ne 0) { throw 'Go desktop, storage or handler tests failed.' } }
+    if (-not $SkipTests) { & $go test -tags nosqlite ./internal/app/... ./internal/desktop/... ./internal/storage/... ./internal/handlers/...; if ($LASTEXITCODE -ne 0) { throw 'Go app, desktop, storage or handler tests failed.' } }
     & $go build -tags nosqlite -trimpath -ldflags '-s -w -H windowsgui' -o (Join-Path $publish 'lumiven-core.exe') .
     if ($LASTEXITCODE -ne 0) { throw 'Go core build failed. Check CGO C compiler availability (CC).' }
 } finally { Pop-Location }

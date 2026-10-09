@@ -301,6 +301,29 @@ window.__wx_channels_profile_collector = {
     return merged;
   },
 
+  loadProfilePageVideos: async function () {
+    var username = new URLSearchParams(window.location.search).get('username');
+    if (!username) throw new Error('当前账号缺少用户名');
+    if (!WXU.API || typeof WXU.API.finderUserPage !== 'function') {
+      throw new Error('微信视频列表接口尚未就绪，请重新打开账号主页');
+    }
+
+    var response = await WXU.API.finderUserPage({
+      username: username,
+      finderUsername: window.__wx_username || '',
+      lastBuffer: '',
+      needFansCount: 0,
+      objectId: '0'
+    });
+    if (!response || response.errCode || !response.data || !Array.isArray(response.data.object)) {
+      throw new Error((response && response.errMsg) || '读取视频列表失败');
+    }
+    response.data.object.forEach(function (item) {
+      var video = WXU.format_feed(item);
+      if (video) this.addVideoFromAPI(video);
+    }, this);
+  },
+
   // 在Profile页面操作区注入批量下载按钮
   injectToolbarDownloadIcon: function () {
     var self = this;
@@ -364,6 +387,17 @@ window.__wx_channels_profile_collector = {
               __wx_log({ msg: '❌ ' + (e.message || e) });
               return;
             }
+          } else if (!self.filterLivePictureVideos(self.videos).some(function (v) {
+            return v && (v.type === 'media' || v.type === 'live_replay');
+          })) {
+            try {
+              await self.loadProfilePageVideos();
+            } catch (e) {
+              var errorMessage = e.message || String(e);
+              __wx_log({ msg: '❌ ' + errorMessage });
+              window.alert(errorMessage);
+              return;
+            }
           }
 
           // 显示批量下载UI（包含视频和直播回放，排除正在直播）
@@ -373,6 +407,7 @@ window.__wx_channels_profile_collector = {
 
           if (filteredVideos.length === 0) {
             __wx_log({ msg: '⚠️ 暂无视频数据' });
+            if (__wx_is_profile_page__()) window.alert('当前账号没有可下载的视频');
             return;
           }
 

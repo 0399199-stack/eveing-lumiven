@@ -400,7 +400,7 @@ func (app *App) HandleRequest(Conn *SunnyNet.HttpConn) {
 			utils.Error("HandleRequest panic: %v", r)
 		}
 	}()
-	if app.Cfg.DesktopManaged && (Conn.Request == nil || Conn.Request.URL == nil || !strings.EqualFold(Conn.Request.URL.Hostname(), "channels.weixin.qq.com")) {
+	if app.Cfg.DesktopManaged && !isManagedInterceptTarget(Conn) {
 		return
 	}
 
@@ -423,6 +423,19 @@ func (app *App) HandleRequest(Conn *SunnyNet.HttpConn) {
 			}
 		}
 	}
+}
+
+func isManagedInterceptTarget(conn *SunnyNet.HttpConn) bool {
+	if conn == nil || conn.Request == nil || conn.Request.URL == nil {
+		return false
+	}
+	host := conn.Request.URL.Hostname()
+	if strings.EqualFold(host, "channels.weixin.qq.com") {
+		return true
+	}
+	return strings.EqualFold(host, "res.wx.qq.com") &&
+		strings.HasPrefix(conn.Request.URL.Path, "/t/wx_fed/finder/web/web-finder/res/js/virtual_svg-icons-register") &&
+		(conn.Type == public.HttpSendRequest || conn.Type == public.HttpResponseOK)
 }
 
 func (app *App) printEnvConfig() {

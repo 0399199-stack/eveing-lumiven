@@ -16,7 +16,7 @@ if (Test-Path -LiteralPath $driverSource) {
     $found = Get-ChildItem -LiteralPath $driverSource -Recurse -File | Select-String -Pattern 'typedef\s+.*NF_|NF_EventHandler|nf_registerDriver|nfapi\.dll|Vitaly Sidorov'
     if ($found) { throw 'NetFilter SDK-derived declarations or driver-loading code remain.' }
 }
-foreach ($file in @('LICENSE', 'NOTICE', 'THIRD-PARTY-NOTICES.md', 'core/LICENSE', 'docs/licenses/SunnyNet-MIT.txt', 'docs/licenses/Go-BSD.txt', 'docs/licenses/Gorilla-BSD.txt', 'docs/licenses/PKCS12-BSD.txt', 'docs/licenses/RC2-MIT.txt', 'docs/licenses/Gopeed-GPL-3.0.txt')) {
+foreach ($file in @('LICENSE', 'NOTICE', 'THIRD-PARTY-NOTICES.md', 'core/LICENSE', 'docs/licenses/SunnyNet-MIT.txt', 'docs/licenses/Go-BSD.txt', 'docs/licenses/Gorilla-BSD.txt', 'docs/licenses/PKCS12-BSD.txt', 'docs/licenses/RC2-MIT.txt', 'docs/licenses/Mitt-MIT.txt', 'docs/licenses/Gopeed-GPL-3.0.txt')) {
     if (-not (Test-Path -LiteralPath (Join-Path $root $file))) { throw "Required license missing: $file" }
 }
 Write-Host 'License source gate passed: commercial NetFilter artifacts excluded; required notices present.'
