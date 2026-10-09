@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Lumiven.Models;
 
 namespace Lumiven.Services;
@@ -40,10 +41,37 @@ public static class AppServices
         try
         {
             Directory.CreateDirectory(DataDirectory);
-            File.AppendAllText(Path.Combine(DataDirectory, "app.log"), $"{DateTimeOffset.Now:O} {context}: {exception.GetType().Name}: {exception.Message}{Environment.NewLine}");
+            File.AppendAllText(Path.Combine(DataDirectory, "app.log"), $"{DateTimeOffset.Now:O} {context}: {RedactDiagnostic(exception.ToString())}{Environment.NewLine}");
         }
         catch (IOException) { }
         catch (UnauthorizedAccessException) { }
+    }
+
+    public static string UserError(Exception exception)
+    {
+        var detail = exception.ToString();
+        if (detail.Contains("Import-Certificate", StringComparison.OrdinalIgnoreCase))
+            return "本机根证书安装失败。Windows 可能需要安全确认；如弹出系统提示，请确认后重试。未出现提示时请查看本地日志。";
+        if (detail.Contains("Windows 设置失败", StringComparison.OrdinalIgnoreCase))
+            return "Windows 网络设置失败，微信下载未启用。请查看本地日志后重试。";
+        if (detail.Contains("找不到可用的本地端口", StringComparison.Ordinal))
+            return "本地端口被占用，请关闭旧下载器后重试。";
+        return exception switch
+        {
+            FileNotFoundException => "所需文件不存在，请检查软件安装或视频文件位置。",
+            DirectoryNotFoundException => "文件夹不存在或已移动，请重新选择。",
+            UnauthorizedAccessException => "访问被拒绝，请检查文件夹权限后重试。",
+            IOException => "文件访问失败，请检查磁盘空间与文件占用情况。",
+            _ => "操作失败，请查看本地日志后重试。"
+        };
+    }
+
+    public static string RedactDiagnostic(string text)
+    {
+        text = Regex.Replace(text, @"(?i)\b(?:https?|wss?)://[^\s'""<>]+", "<url>");
+        text = Regex.Replace(text, @"(?i)\b(?:secret_token|x-local-auth|access_token|api_key)\s*[:=]\s*[^\s,;]+", "<credential>");
+        text = Regex.Replace(text, @"(?i)(?:[a-z]:\\|\\\\)[^\r\n'""<>|]+", "<path>");
+        return Regex.Replace(text, @"\b[0-9a-fA-F]{32,}\b", "<credential>");
     }
 }
 

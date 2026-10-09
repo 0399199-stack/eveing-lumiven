@@ -94,11 +94,25 @@ func restoreValues(key registry.Key, values []RegistryValue) error {
 	return nil
 }
 
-func hiddenPS(script string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+func runPS(script string, allowUI bool) ([]byte, error) {
+	timeout := 20 * time.Second
+	args := []string{"-NoProfile", "-NonInteractive", "-Command"}
+	if allowUI {
+		timeout = 2 * time.Minute
+		args = []string{"-NoProfile", "-Command"}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference='Stop'; "+script)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
+	args = append(args, "[Console]::OutputEncoding=[Text.Encoding]::UTF8; $ErrorActionPreference='Stop'; "+script)
+	cmd := exec.CommandContext(ctx, "powershell.exe", args...)
+	if systemRoot := os.Getenv("SystemRoot"); systemRoot != "" {
+		cmd.Env = append(os.Environ(), "PSModulePath="+filepath.Join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "Modules"))
+	}
+	if allowUI {
+		cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: 0x00000010} // CREATE_NEW_CONSOLE keeps Windows confirmation visible.
+	} else {
+		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
+	}
 	output, err := cmd.CombinedOutput()
 	if ctx.Err() != nil {
 		return output, fmt.Errorf("Windows证书操作超时: %w", ctx.Err())
@@ -217,7 +231,7 @@ func PrepareSystem(dir string, port int) (*SystemLease, []byte, []byte, error) {
 	}
 	hash := sha1.Sum(block.Bytes)
 	lease.Thumbprint = strings.ToUpper(hex.EncodeToString(hash[:]))
-	output, err := hiddenPS("if (Test-Path -LiteralPath 'Cert:\\CurrentUser\\Root\\" + lease.Thumbprint + "') { 'present' }")
+	output, err := runPS("if (Test-Path -LiteralPath 'Cert:\\CurrentUser\\Root\\"+lease.Thumbprint+"') { 'present' }", false)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -226,7 +240,7 @@ func PrepareSystem(dir string, port int) (*SystemLease, []byte, []byte, error) {
 		return nil, nil, nil, err
 	}
 	if lease.CertificateOwned {
-		_, err = hiddenPS("Import-Certificate -FilePath '" + strings.ReplaceAll(certPath, "'", "''") + "' -CertStoreLocation 'Cert:\\CurrentUser\\Root' | Out-Null")
+		_, err = runPS("Import-Certificate -FilePath '"+strings.ReplaceAll(certPath, "'", "''")+"' -CertStoreLocation 'Cert:\\CurrentUser\\Root' | Out-Null", true)
 		if err != nil {
 			_ = RecoverSystem(dir)
 			return nil, nil, nil, err
@@ -306,7 +320,7 @@ func RecoverSystem(dir string) error {
 		if _, err = hex.DecodeString(lease.Thumbprint); err != nil {
 			return err
 		}
-		_, err = hiddenPS("$p='Cert:\\CurrentUser\\Root\\" + lease.Thumbprint + "'; if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -ErrorAction SilentlyContinue }; if (Test-Path -LiteralPath $p) { throw '无法移除本软件安装的证书' }")
+		_, err = runPS("$p='Cert:\\CurrentUser\\Root\\"+lease.Thumbprint+"'; if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Confirm:$false -ErrorAction SilentlyContinue }; if (Test-Path -LiteralPath $p) { throw '无法移除本软件安装的证书' }", true)
 		if err != nil {
 			return err
 		}

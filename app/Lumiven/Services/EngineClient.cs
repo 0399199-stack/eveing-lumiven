@@ -18,6 +18,7 @@ public sealed class EngineClient(AppSettings settings, LibraryService library, s
     private readonly SemaphoreSlim _lifecycle = new(1, 1);
     private readonly SemaphoreSlim _cacheGate = new(1, 1);
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(8) };
+    private CancellationTokenSource? _activation;
     private CancellationTokenSource? _session;
     private Task? _pollTask, _listenTask;
     private ClientWebSocket? _socket;
@@ -61,6 +62,7 @@ public sealed class EngineClient(AppSettings settings, LibraryService library, s
     public async Task EnableAsync()
     {
         await _lifecycle.WaitAsync();
+        CancellationTokenSource? activation = null;
         try
         {
             if (IsRunning && StatusState == "ready" && !_stopRequested) return;
@@ -86,33 +88,40 @@ public sealed class EngineClient(AppSettings settings, LibraryService library, s
                 WorkingDirectory = coreDirectory
             };
             foreach (var argument in args) start.ArgumentList.Add(argument);
-            SetStatus("starting", "正在为当前用户启用微信下载…");
+            activation = new CancellationTokenSource();
+            _activation = activation;
+            SetStatus("starting", "正在等待 Windows 安全确认；如出现系统提示，请确认。可点击停止接入取消。");
             _stopRequested = false;
+            activation.Token.ThrowIfCancellationRequested();
             _process = Process.Start(start);
             if (_process is null) throw new InvalidOperationException("Windows 未返回下载内核进程，无法确认接入状态。");
             _session = new CancellationTokenSource();
-            for (var attempt = 0; attempt < 60; attempt++)
+            var startupTimeout = Stopwatch.StartNew();
+            while (startupTimeout.Elapsed < TimeSpan.FromSeconds(150))
             {
                 try
                 {
-                    var status = await ReadStatusAsync(_session.Token);
+                    var status = await ReadStatusAsync(activation.Token);
                     if (status.State == "failed") throw new InvalidOperationException(status.Error ?? "微信下载接入失败");
                     if (status.State == "ready")
                     {
+                        activation.Token.ThrowIfCancellationRequested();
                         IsRunning = true;
                         SetStatus("ready", "服务已启用 · 请打开或刷新微信视频号");
-                        await FetchSnapshotAsync(_session.Token);
+                        await FetchSnapshotAsync(activation.Token);
+                        activation.Token.ThrowIfCancellationRequested();
                         StartMonitoring();
                         return;
                     }
                 }
                 catch (HttpRequestException) { }
-                catch (TaskCanceledException) when (!_session.IsCancellationRequested) { }
+                catch (TaskCanceledException) when (!activation.IsCancellationRequested) { }
                 if (HasEngineExited()) break;
-                await Task.Delay(500, _session.Token);
+                await Task.Delay(500, activation.Token);
             }
             throw new InvalidOperationException("下载服务未能启动，请检查权限与日志后重试。");
         }
+        catch (OperationCanceledException) when (activation?.IsCancellationRequested == true) { }
         catch (Exception ex)
         {
             AppServices.Log("启用下载", ex);
@@ -120,26 +129,37 @@ public sealed class EngineClient(AppSettings settings, LibraryService library, s
             try
             {
                 await StopCoreAsync();
-                SetStatus("failed", $"启用失败，接入已停止：{ex.Message}");
+                SetStatus("failed", $"启用失败，接入已停止：{AppServices.UserError(ex)}");
             }
             catch (Exception cleanupError)
             {
                 if (!HasEngineExited()) StartMonitoring();
                 AppServices.Log("启用失败后的恢复", cleanupError);
-                throw new InvalidOperationException($"{ex.Message}\n{cleanupError.Message}", ex);
+                throw new InvalidOperationException("启用失败且接入恢复尚未确认，请点击停止接入并查看本地日志。", ex);
             }
             throw;
         }
-        finally { _lifecycle.Release(); }
+        finally
+        {
+            _activation = null;
+            activation?.Dispose();
+            _lifecycle.Release();
+        }
     }
 
     public async Task StopAsync()
     {
+        try { _activation?.Cancel(); } catch (ObjectDisposedException) { }
         await _lifecycle.WaitAsync();
         try
         {
             await StopCoreAsync();
             await SaveCacheAsync();
+        }
+        catch
+        {
+            if (!HasEngineExited()) StartMonitoring();
+            throw;
         }
         finally { _lifecycle.Release(); }
     }
@@ -151,7 +171,7 @@ public sealed class EngineClient(AppSettings settings, LibraryService library, s
         if (!HasEngineExited())
         {
             IsRunning = true;
-            SetStatus("stopping", "正在停止下载并恢复原代理…");
+            SetStatus("stopping", "正在停止接入并恢复原代理；如出现 Windows 安全确认，请确认…");
             try { await RequestShutdownAsync(); }
             catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException)
             {
@@ -159,7 +179,7 @@ public sealed class EngineClient(AppSettings settings, LibraryService library, s
                 AppServices.Log("请求停止内核", ex);
             }
             var timeout = Stopwatch.StartNew();
-            while (!HasEngineExited() && timeout.Elapsed < TimeSpan.FromSeconds(12)) await Task.Delay(100);
+            while (!HasEngineExited() && timeout.Elapsed < TimeSpan.FromSeconds(150)) await Task.Delay(100);
             if (!HasEngineExited())
             {
                 var message = "下载内核仍在运行，停止尚未确认。请重试停止接入；恢复完成前不能重新启用或退出。";
@@ -177,7 +197,8 @@ public sealed class EngineClient(AppSettings settings, LibraryService library, s
         }
         catch (Exception ex)
         {
-            SetStatus("recovery_required", $"内核已退出，但代理或证书恢复尚未确认：{ex.Message}。请重试停止接入。");
+            AppServices.Log("停止接入后恢复", ex);
+            SetStatus("recovery_required", "内核已退出，但代理或证书恢复尚未确认。请重试停止接入并查看本地日志。");
             throw;
         }
         _process?.Dispose(); _process = null;
@@ -223,7 +244,7 @@ public sealed class EngineClient(AppSettings settings, LibraryService library, s
             start.ArgumentList.Add(CoreDirectory);
             _recoveryProcess = Process.Start(start) ?? throw new InvalidOperationException("无法启动代理恢复工具。");
         }
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(150));
         try { await _recoveryProcess.WaitForExitAsync(timeout.Token); }
         catch (OperationCanceledException) { throw new InvalidOperationException("代理恢复工具仍在运行，请稍后重试。"); }
         int exitCode = _recoveryProcess.ExitCode;
@@ -302,7 +323,7 @@ public sealed class EngineClient(AppSettings settings, LibraryService library, s
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { break; }
                 catch (Exception recoveryError)
                 {
-                    SetStatus("recovery_required", $"内核已退出，但原代理恢复尚未确认：{recoveryError.Message}。请重试停止接入。");
+                    SetStatus("recovery_required", "内核已退出，但原代理恢复尚未确认。请重试停止接入并查看本地日志。");
                     AppServices.Log("内核退出后恢复", recoveryError);
                     // Keep monitoring/retrying the recovery rather than hiding an incomplete cleanup.
                 }

@@ -3,10 +3,46 @@
 package desktop
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha1"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/hex"
+	"encoding/pem"
+	"math/big"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestCertificateStoreCommandsCanPreviewWithoutChangingTrust(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	template := &x509.Certificate{SerialNumber: big.NewInt(time.Now().UnixNano()), Subject: pkix.Name{CommonName: "Lumiven preview test"}, NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour), IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign}
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	certPath := filepath.Join(t.TempDir(), "preview.cer")
+	if err = os.WriteFile(certPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0600); err != nil {
+		t.Fatal(err)
+	}
+	hash := sha1.Sum(der)
+	thumbprint := strings.ToUpper(hex.EncodeToString(hash[:]))
+	storePath := "Cert:\\CurrentUser\\Root\\" + thumbprint
+	if _, err = runPS("Import-Certificate -FilePath '"+strings.ReplaceAll(certPath, "'", "''")+"' -CertStoreLocation 'Cert:\\CurrentUser\\Root' -WhatIf | Out-Null", true); err != nil {
+		t.Fatalf("certificate import preview failed: %v", err)
+	}
+	output, err := runPS("Test-Path -LiteralPath '"+storePath+"'", false)
+	if err != nil || strings.TrimSpace(string(output)) != "False" {
+		t.Fatalf("import preview changed trust store: %q, %v", output, err)
+	}
+}
 
 func TestProxyOwnershipRequiresUnchangedAppliedSettings(t *testing.T) {
 	ours := []RegistryValue{{Name: "ProxyServer", Type: 1, Data: []byte("127.0.0.1:2025"), Present: true}, {Name: "ProxyEnable", Type: 4, Data: []byte{1, 0, 0, 0}, Present: true}, {Name: "ProxyOverride", Type: 1, Data: []byte("<local>"), Present: true}}

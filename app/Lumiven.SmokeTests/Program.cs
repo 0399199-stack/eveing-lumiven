@@ -52,9 +52,16 @@ var tasks = await client.GetTasksAsync();
 Check(tasks.Single(x => x.Id == "partial").Status == "interrupted", "Unfinished cache must become interrupted after restart");
 Check(tasks.Single(x => x.Id == "completed").Status == "completed", "Completed cache must stay completed");
 Check(new AppSettings().Theme == "Light", "New installations must use the approved light ice-blue theme");
+var certificateFailure = new InvalidOperationException("Windows 设置失败: Import-Certificate -FilePath 'C:\\Users\\15168\\secret.cer': 此操作中不允许使用 UI。", new Exception("exit status 1"));
+var userError = AppServices.UserError(certificateFailure);
+Check(userError.Contains("证书") && !userError.Contains("Import-Certificate") && !userError.Contains("C:\\Users") && !userError.Contains('\n'),
+    "Certificate failure must be actionable without exposing PowerShell output in the UI");
+var diagnostic = AppServices.RedactDiagnostic("Import-Certificate -FilePath 'C:\\Users\\15168\\secret.cer' https://example.com/watch?key=private secret_token: 0123456789abcdef0123456789abcdef");
+Check(diagnostic.Contains("Import-Certificate") && !diagnostic.Contains("15168") && !diagnostic.Contains("private") && !diagnostic.Contains("0123456789abcdef"),
+    "Local diagnostics must retain the failure command but redact paths and credentials");
 Console.WriteLine(JsonSerializer.Serialize(new { passed = true, persistedLibrary = true, importDoesNotMoveFiles = true,
     idempotentImport = true, longChinesePath = true, externalMissing = true, interruptedCache = true,
-    falseCompletionPrevented = true, defaultLight = true, systemChanges = false }));
+    falseCompletionPrevented = true, defaultLight = true, safeCertificateError = true, redactedDiagnostics = true, systemChanges = false }));
 
 static void Check(bool condition, string message)
 {

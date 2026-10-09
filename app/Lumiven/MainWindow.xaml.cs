@@ -42,6 +42,7 @@ public sealed partial class MainWindow : Window
     private bool _initialized;
     private bool _exiting;
     private bool _busy;
+    private bool _stopping;
     private MediaItem? _playing;
     private Image? _sourceCover;
     private MediaPlayer? _player;
@@ -210,10 +211,10 @@ public sealed partial class MainWindow : Window
     private async void Stop_Click(object sender, RoutedEventArgs e)
     {
         if (_performanceTest) return;
-        if (_busy) return;
-        _busy = true; StopButton.IsEnabled = false;
+        if (_stopping) return;
+        _stopping = true; StopButton.IsEnabled = false;
         await GuardAsync(async () => { await AppServices.Engine.StopAsync(); SetStatus(AppServices.Engine.StatusText); });
-        _busy = false;
+        _stopping = false;
         SetStatus(AppServices.Engine.StatusText);
     }
 
@@ -225,8 +226,8 @@ public sealed partial class MainWindow : Window
         bool needsRecovery = AppServices.Engine.StatusState == "recovery_required";
         ConnectionLabel.Text = needsRecovery ? "需要恢复接入" : running ? "微信下载已启用" : "尚未启用";
         ConnectionDot.Fill = ThemeBrush(running ? "AccentBrush" : "MutedBrush");
-        EnableButton.IsEnabled = !_busy && !running && !needsRecovery;
-        StopButton.IsEnabled = !_busy && (running || needsRecovery);
+        EnableButton.IsEnabled = !_busy && !_stopping && !running && !needsRecovery;
+        StopButton.IsEnabled = !_stopping && (running || needsRecovery || AppServices.Engine.StatusState == "starting");
     }
 
     private void FlushTaskUpdates()
@@ -554,7 +555,8 @@ public sealed partial class MainWindow : Window
             catch (Exception ex)
             {
                 _exiting = false;
-                ShowNotice("暂时无法退出", $"停止接入失败：{ex.Message}。请先在设置中停止接入后重试。", InfoBarSeverity.Error);
+                AppServices.Log("退出时停止接入", ex);
+                ShowNotice("暂时无法退出", "停止接入或恢复原代理尚未完成。请在设置中重试停止接入，并查看本地日志。", InfoBarSeverity.Error);
                 SetStatus(AppServices.Engine.StatusText);
                 return;
             }
@@ -569,7 +571,14 @@ public sealed partial class MainWindow : Window
     {
         try { await action(); }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
-        catch (Exception ex) { AppServices.Log("界面操作", ex); ShowNotice("操作未完成", ex.Message, InfoBarSeverity.Error); }
+        catch (Exception ex)
+        {
+            AppServices.Log("界面操作", ex);
+            var message = AppServices.Engine.StatusState == "recovery_required"
+                ? "接入恢复尚未确认。请点击停止接入并查看本地日志。"
+                : AppServices.UserError(ex);
+            ShowNotice("操作未完成", message, InfoBarSeverity.Error);
+        }
     }
 
     private void ShowNotice(string title, string message, InfoBarSeverity severity)
