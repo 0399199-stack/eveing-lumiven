@@ -156,6 +156,7 @@ public sealed partial class MainWindow : Window
 
     private void Navigate_Click(object sender, RoutedEventArgs e)
     {
+        using var measurement = _performance.Measure("Navigate");
         string next = (string)((Button)sender).Tag;
         if (_pageName == next) return;
         foreach (var progress in Descendants<SmoothProgressBar>(_page)) progress.Suspend();
@@ -230,6 +231,7 @@ public sealed partial class MainWindow : Window
 
     private void FlushTaskUpdates()
     {
+        using var measurement = _performance.Measure("FlushTaskUpdates");
         if (_pendingTasks.Count == 0) return;
         bool completed = false;
         foreach (var update in _pendingTasks.Values)
@@ -304,6 +306,7 @@ public sealed partial class MainWindow : Window
 
     private void FilterLibrary()
     {
+        using var measurement = _performance.Measure("FilterLibrary");
         string query = LibrarySearch.Text.Trim();
         var results = _media.Where(item => query.Length == 0 || item.Title.Contains(query, StringComparison.OrdinalIgnoreCase) || item.Author.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
         // One ItemsSource reset lets the virtualized panel realize only visible cards.
@@ -377,13 +380,15 @@ public sealed partial class MainWindow : Window
 
     private void TaskList_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
     {
+        using var measurement = _performance.Measure("TaskCardRealize");
         if (!args.InRecycleQueue && args.Phase == 0 && args.ItemContainer.ContentTemplateRoot is FrameworkElement content) Motion.Enter(content, 220, 8);
     }
 
     private async void MediaGrid_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
     {
         if (args.InRecycleQueue || args.Phase != 0 || args.Item is not MediaItem item) return;
-        if (args.ItemContainer.ContentTemplateRoot is FrameworkElement content) Motion.Enter(content, 220, 8);
+        using (_performance.Measure("MediaCardRealize"))
+            if (args.ItemContainer.ContentTemplateRoot is FrameworkElement content) Motion.Enter(content, 220, 8);
         if (!_performanceTest && string.IsNullOrWhiteSpace(item.Thumbnail) && !item.IsMissing)
         {
             // Fast scrolling can recycle hundreds of containers; only request the thumbnail
@@ -397,6 +402,7 @@ public sealed partial class MainWindow : Window
 
     private void MediaGrid_SizeChanged(object sender, SizeChangedEventArgs e)
     {
+        using var measurement = _performance.Measure("MediaGridSizeChanged");
         if (MediaGrid.ItemsPanelRoot is not ItemsWrapGrid panel || e.NewSize.Width <= 0) return;
         int columns = e.NewSize.Width >= 690 ? 3 : e.NewSize.Width >= 440 ? 2 : 1;
         panel.MaximumRowsOrColumns = columns;
@@ -405,6 +411,7 @@ public sealed partial class MainWindow : Window
 
     private void CoverFrame_SizeChanged(object sender, SizeChangedEventArgs e)
     {
+        using var measurement = _performance.Measure("CoverFrameSizeChanged");
         if (sender is not FrameworkElement element || e.NewSize.Width <= 0 || e.NewSize.Height <= 0) return;
         var visual = ElementCompositionPreview.GetElementVisual(element);
         var radius = new System.Numerics.Vector2(13);
@@ -517,6 +524,7 @@ public sealed partial class MainWindow : Window
         if (suspended)
         {
             _taskTimer.Stop(); _searchTimer.Stop(); _performanceTimer.Stop();
+            _performance.Pause();
             foreach (var element in Descendants<FrameworkElement>(Root))
                 if (Motion.GetEnabled(element)) Motion.Reset(element);
             Motion.Reset(_page); Motion.Reset(Notice); Motion.Reset(ConnectionDot);
@@ -524,6 +532,7 @@ public sealed partial class MainWindow : Window
         }
         else
         {
+            _performance.Resume();
             _taskTimer.Start();
             if (_searchPending) _searchTimer.Start();
             if (_performanceTest && _performanceStep < 240) _performanceTimer.Start();
@@ -576,15 +585,18 @@ public sealed partial class MainWindow : Window
         EnableButton.IsEnabled = false;
         StopButton.IsEnabled = false;
         EngineStatusText.Text = "性能测试数据 · 1000 条历史 + 5 个并行进度任务 · 不下载文件，不修改媒体库";
-        for (int i = 0; i < 1000; i++)
-            _media.Add(new MediaItem
-            {
-                Id = $"performance-media-{i}", Title = $"性能测试数据 · 灵感片段 {i + 1:0000}", Author = $"测试作者 {i % 32 + 1}",
-                Quality = "1080p", FilePath = Path.Combine(Path.GetTempPath(), $"lumiven-performance-{i}.mp4"),
-                SizeBytes = 1024 * 1024 * (20L + i % 80), CompletedAt = DateTimeOffset.Now.AddMinutes(-i)
-            });
-        FilterLibrary();
         _performance.Start(DispatcherQueue, "Synthetic UI: 1000 media cards, 5 progress tasks, navigation and virtualized scrolling. No network workload.");
+        using (_performance.Measure("Prepare1000Items"))
+        {
+            for (int i = 0; i < 1000; i++)
+                _media.Add(new MediaItem
+                {
+                    Id = $"performance-media-{i}", Title = $"性能测试数据 · 灵感片段 {i + 1:0000}", Author = $"测试作者 {i % 32 + 1}",
+                    Quality = "1080p", FilePath = Path.Combine(Path.GetTempPath(), $"lumiven-performance-{i}.mp4"),
+                    SizeBytes = 1024 * 1024 * (20L + i % 80), CompletedAt = DateTimeOffset.Now.AddMinutes(-i)
+                });
+            FilterLibrary();
+        }
         _performanceTimer.Tick += PerformanceTick;
         _performanceTimer.Start();
         ShowNotice("性能测试数据", "60 秒界面压力测试正在运行，结果会保存到本地 performance 目录。", InfoBarSeverity.Informational);
@@ -592,27 +604,30 @@ public sealed partial class MainWindow : Window
 
     private async void PerformanceTick(object? sender, object e)
     {
-        _performanceStep++;
-        for (int i = 0; i < 5; i++)
-            _pendingTasks[$"performance-task-{i}"] = new DownloadTask
+        using (_performance.Measure("PerformanceTick"))
+        {
+            _performanceStep++;
+            for (int i = 0; i < 5; i++)
+                _pendingTasks[$"performance-task-{i}"] = new DownloadTask
+                {
+                    Id = $"performance-task-{i}", Title = $"性能测试数据 · 并行下载 {i + 1}", Author = "测试作者", Quality = "1080p",
+                    Status = _performanceStep >= 220 ? "completed" : "downloading", Progress = Math.Min(100, _performanceStep * 100d / 220),
+                    BytesTotal = 104857600, BytesReceived = (long)Math.Min(104857600, _performanceStep * 104857600d / 220), UpdatedAt = DateTimeOffset.Now
+                };
+            if (_performanceStep % 24 == 0)
             {
-                Id = $"performance-task-{i}", Title = $"性能测试数据 · 并行下载 {i + 1}", Author = "测试作者", Quality = "1080p",
-                Status = _performanceStep >= 220 ? "completed" : "downloading", Progress = Math.Min(100, _performanceStep * 100d / 220),
-                BytesTotal = 104857600, BytesReceived = (long)Math.Min(104857600, _performanceStep * 104857600d / 220), UpdatedAt = DateTimeOffset.Now
-            };
-        if (_performanceStep % 24 == 0)
-        {
-            var button = ((_performanceStep / 24) % 4) switch { 0 => DownloadsNav, 1 => LibraryNav, 2 => SettingsNav, _ => AboutNav };
-            Navigate_Click(button, new RoutedEventArgs());
+                var button = ((_performanceStep / 24) % 4) switch { 0 => DownloadsNav, 1 => LibraryNav, 2 => SettingsNav, _ => AboutNav };
+                Navigate_Click(button, new RoutedEventArgs());
+            }
+            if (_pageName == "library" && _performanceStep % 4 == 0)
+            {
+                var scroll = Descendants<ScrollViewer>(MediaGrid).FirstOrDefault();
+                if (scroll is not null && scroll.ScrollableHeight > 0)
+                    scroll.ChangeView(null, (_performanceStep * 60) % scroll.ScrollableHeight, null, false);
+            }
+            if (_performanceStep < 240) return;
+            _performanceTimer.Stop();
         }
-        if (_pageName == "library" && _performanceStep % 4 == 0)
-        {
-            var scroll = Descendants<ScrollViewer>(MediaGrid).FirstOrDefault();
-            if (scroll is not null && scroll.ScrollableHeight > 0)
-                scroll.ChangeView(null, (_performanceStep * 60) % scroll.ScrollableHeight, null, false);
-        }
-        if (_performanceStep < 240) return;
-        _performanceTimer.Stop();
         await GuardAsync(async () =>
         {
             var path = await _performance.StopAsync();

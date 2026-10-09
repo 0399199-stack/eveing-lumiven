@@ -2,7 +2,7 @@
 // Usage: node internal/desktop/blackbox.test.mjs <absolute core executable>
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
-import { mkdtemp, writeFile, readFile } from 'node:fs/promises';
+import { mkdtemp, writeFile, readFile, mkdir, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
@@ -155,9 +155,33 @@ try {
   assert.equal(stopped.tasks.filter(t => t.status === 'completed').length, 7);
   assert.equal(stopped.tasks.filter(t => t.status === 'failed').length, 5);
   assert.equal(stopped.tasks.filter(task => task.videoId.startsWith('batch-stop-') && task.status === 'failed').length, 2);
+
+  const blocked = await request('/__wx_channels_api/desktop_begin', { videoId: 'write-failure-test', title: 'write-failure-test', author: 'io-fixture', quality: '原始视频', totalBytes: payload.length });
+  const blockedAuthorDir = path.join(directory, '媒体', 'io-fixture');
+  const blockedFinal = path.join(blockedAuthorDir, 'writefail.mp4');
+  const blockedTemp = `${blockedFinal}.${blocked.id}.tmp`;
+  await mkdir(blockedTemp, { recursive: true });
+  await writeFile(path.join(blockedTemp, 'sentinel'), 'test-owned directory');
+  const form = new FormData();
+  form.set('video', new Blob([payload], { type: 'video/mp4' }), 'writefail.mp4');
+  form.set('filename', 'writefail.mp4');
+  form.set('authorName', 'io-fixture');
+  form.set('videoId', 'write-failure-test');
+  form.set('title', 'write-failure-test');
+  form.set('desktopTaskId', blocked.id);
+  const blockedResponse = await fetch(base + '/__wx_channels_api/save_video', { method: 'POST', headers: { 'X-Local-Auth': pageToken }, body: form });
+  assert.equal(blockedResponse.status, 500, 'occupied temporary path must reject the upload');
+  const blockedTasks = await tasksUntil(tasks => tasks.some(task => task.id === blocked.id && task.status === 'failed'));
+  const blockedTask = blockedTasks.find(task => task.id === blocked.id);
+  assert.equal(blockedTask.filePath, '');
+  assert.equal(blockedTask.relativePath, '');
+  assert.deepEqual(await readdir(blockedAuthorDir), [path.basename(blockedTemp)], 'failed save must not leave a video');
+  assert.equal((await request('/api/downloads?query=write-failure-test')).data.total, 0, 'failed save must not create a completed record');
+  await rm(blockedAuthorDir, { recursive: true });
+
   await request('/api/desktop/shutdown', {});
   await exit();
-  console.log(JSON.stringify({ passed: true, directory, completed: 7, failed: 5, independentPaths: 5, maximumConcurrentVideos, bytesVerified: true, pageUploaderVerified: true, restartVerified: true, abnormalExitVerified: true, networkInterruptionVerified: true, portConflictVerified: true, webSocketEventsVerified: true, batchShutdownVerified: true, authenticated: true, systemChanges: false }));
+  console.log(JSON.stringify({ passed: true, directory, completed: 7, failed: 6, independentPaths: 5, maximumConcurrentVideos, bytesVerified: true, pageUploaderVerified: true, restartVerified: true, abnormalExitVerified: true, networkInterruptionVerified: true, portConflictVerified: true, webSocketEventsVerified: true, batchShutdownVerified: true, writeFailureVerified: true, authenticated: true, systemChanges: false }));
 } finally {
   webSocket?.destroy();
   child.kill();

@@ -262,6 +262,26 @@ func (h *UploadHandler) getDownloadsDir() (string, error) {
 	return cfg.GetResolvedDownloadsDir()
 }
 
+// Called only for a file this handler has just moved to its final path.
+func (h *UploadHandler) completeMovedDesktopTask(taskID, path string, size int64) error {
+	if h.DesktopTasks == nil {
+		return nil
+	}
+	owned, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if err = h.DesktopTasks.Complete(taskID, path, size); err != nil {
+		if current, statErr := os.Stat(path); statErr == nil && os.SameFile(owned, current) {
+			if removeErr := os.Remove(path); removeErr != nil {
+				utils.Warn("保存记录失败后清理新视频失败: %v", removeErr)
+			}
+		}
+		return err
+	}
+	return nil
+}
+
 // Handle implements router.Interceptor
 func (h *UploadHandler) Handle(Conn *SunnyNet.HttpConn) bool {
 	// Critical nil check
@@ -830,7 +850,7 @@ func (h *UploadHandler) HandleCompleteUpload(Conn *SunnyNet.HttpConn) bool {
 		h.sendErrorResponse(Conn, err)
 		return true
 	}
-	if err = h.DesktopTasks.Complete(taskID, finalPath, totalWritten); err != nil {
+	if err = h.completeMovedDesktopTask(taskID, finalPath, totalWritten); err != nil {
 		h.sendErrorResponse(Conn, err)
 		return true
 	}
@@ -1016,7 +1036,7 @@ func (h *UploadHandler) HandleSaveVideo(Conn *SunnyNet.HttpConn) bool {
 		h.sendErrorResponse(Conn, err)
 		return true
 	}
-	if err = h.DesktopTasks.Complete(taskID, filePath, written); err != nil {
+	if err = h.completeMovedDesktopTask(taskID, filePath, written); err != nil {
 		h.sendErrorResponse(Conn, err)
 		return true
 	}
@@ -1681,7 +1701,7 @@ func (h *UploadHandler) HandleDownloadVideo(Conn *SunnyNet.HttpConn) bool {
 			statusMsg = " [已解密]"
 		}
 		utils.Info("✓ [视频下载] 视频已保存%s", statusMsg)
-		if err = h.DesktopTasks.Complete(taskID, finalPath, stat.Size()); err != nil {
+		if err = h.completeMovedDesktopTask(taskID, finalPath, stat.Size()); err != nil {
 			h.DesktopTasks.Fail(taskID, err)
 			return
 		}

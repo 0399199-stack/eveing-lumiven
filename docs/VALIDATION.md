@@ -5,7 +5,7 @@
 | 验收项 | 当前结果 |
 | --- | --- |
 | 纯代理内核可重复构建，无 NetFilter 文件 | 2026-10-09 固定 Go/CGO/Zig 工具链构建通过；许可 gate 无商业 Driver/sys/dll/上游 EXE |
-| Go 桌面任务与路径验证测试 | 2026-10-09 utils 日志脱敏、desktop/storage/handlers 测试通过；本地 HTTP/Gopeed/SQLite 黑盒 5/2 并发均通过 |
+| Go 桌面任务与路径验证测试 | 2026-10-09 utils 日志脱敏、desktop/storage/handlers 测试通过；本地 HTTP/Gopeed/SQLite 黑盒 5/2 并发均通过。随后新增写入失败黑盒及数据库落库失败清理测试，5/2 并发各为 7 完成、6 预期失败，未产生假完成记录 |
 | 自包含 WinUI x64 发布构建 | 2026-10-09 发布构建与 276 个 PE 的原生依赖检查通过；修复发布目录缺少应用 PRI/XBF 导致的启动崩溃后，实际发布目录窗口可启动 |
 | 普通权限启动；显式启用才请求授权 | 安装器 PrivilegesRequired=lowest；shell/core 当前用户权限；真实首次启用 UI 尚需验收 |
 | 已有代理配置完整快照与退出恢复 | 待验证 |
@@ -24,6 +24,8 @@
 本次还发现 `dotnet publish` 默认漏掉本项目的 `App.xbf`、`MainWindow.xbf`、`Themes/Glass.xbf` 和 `EVEING.Lumiven.pri`，会让程序在启动时发生 `XamlParseException`。构建脚本现复制这四项编译资源；重新构建后，发布目录实际窗口可启动，安装器内这四项均经隔离安装检查。当前包已完成安装→更新→卸载，结果见 `artifacts/install-qa/result.json`。这仍是**候选包**。
 
 尚未生成与最终提交对应的源码 ZIP、创建 GitHub Release 或声明 v1.0.0 正式可用。每次修改源码或载荷后均须重新构建并更新上述校验值。
+
+上述安装包和运行截图生成后，又新增了写入失败处理、性能测量与浅色玻璃细节调整。它们已分别通过内核测试与 WinUI 编译，但尚未重新打包及运行截图核对；本节哈希只对应上一版候选包，不能作为当前源码的发布校验值。
 
 ## 尚未完成的验收
 
