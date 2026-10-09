@@ -6,7 +6,6 @@ EVEING Lumiven 1.0.0 是免费、源码公开的 Windows 11 x64 视频号下载�
 - 显式启用证书和当前用户代理，停止时恢复原代理设置。
 - 基于 nobiyou/wx_channel，移除 NetFilter SDK 商业驱动/API；EVEING 新增代码 GPL-3.0-only。
 
-安装包、对应源码归档和 SHA256SUMS 同时附上。完整许可、来源与实际测试记录包含在源码中。已知兼容性以 docs/VALIDATION.md 记录的微信/Windows 实测版本为准。
+安装包、对应源码归档和 SHA256SUMS 同时附上。安装包尚未进行代码签名。完整许可、来源与实际测试记录包含在源码中；已实测 Windows 11 10.0.26200 与微信 4.1.15.13，其他构建的兼容性仍需验证。
 
 开发：EVEING · 联系：0399199@gmail.com
-

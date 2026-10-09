@@ -14,7 +14,7 @@
 
 ## 使用方式
 
-首版仅支持 Windows 11 x64（系统版本 22000 或更新）；Windows 10 将在后续验证。安装包包含 .NET 和 Windows App SDK 运行时，无需自行安装 Go 或 .NET。
+首版仅支持 Windows 11 x64（系统版本 22000 或更新）；已在 Windows 11 10.0.26200 实测，其他构建仍需更多反馈。Windows 10 将在后续验证。安装包包含 .NET 和 Windows App SDK 运行时，无需自行安装 Go 或 .NET。
 
 1. 安装 `EVEING-Lumiven-Setup-1.0.0-x64.exe`，启动普通权限桌面程序。
 2. 在首次启用微信下载时，阅读证书、HTTPS 处理及当前用户代理的说明；主动点击启用后，后台内核以当前用户权限运行。
@@ -36,7 +36,7 @@ pwsh ./scripts/Build.ps1 -Installer
 pwsh ./scripts/Build.ps1 -Installer -SourceArchive
 ```
 
-输出位于 `artifacts/release`：安装包、对应源码 ZIP、`SHA256SUMS`。构建细节与发布验收见 `docs/BUILD.md`。GitHub Actions 默认对 main 构建与测试；tag `v1.0.0` 的公开 Release 需要 GitHub `release` 环境审批与完整验收记录。
+输出位于 `artifacts/release`：安装包、对应源码 ZIP、`SHA256SUMS`。构建细节与发布验收见 `docs/BUILD.md`。GitHub Actions 默认对 main 构建与测试；tag `v1.0.0` 的公开 Release 在完整验收后由维护者手动运行发布工作流。首版安装包尚未进行代码签名。
 
 ## 开源与关于
 
