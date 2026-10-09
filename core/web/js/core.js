@@ -1,0 +1,616 @@
+/**
+ * Core Module - 核心功能
+ * 包含：配置、存储、连接管理、API客户端、WebSocket
+ */
+
+// ============================================
+// Constants and Configuration
+// ============================================
+const STORAGE_KEY_SERVICE_URL = 'wx_channel_service_url';
+const DEFAULT_SERVICE_URL = 'http://127.0.0.1:2025';
+const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16000, 30000];
+
+function getLocalAuthToken() {
+    try {
+        return (localStorage.getItem('wx_channel_auth_token') || localStorage.getItem('wx_channel_token') || '').trim();
+    } catch (e) {
+        return '';
+    }
+}
+
+// ============================================
+// LocalStorage Persistence
+// ============================================
+const StorageManager = {
+    saveServiceUrl(url) {
+        try {
+            localStorage.setItem(STORAGE_KEY_SERVICE_URL, url);
+            return true;
+        } catch (e) {
+            console.error('Failed to save service URL:', e);
+            return false;
+        }
+    },
+
+    loadServiceUrl() {
+        try {
+            return localStorage.getItem(STORAGE_KEY_SERVICE_URL) || DEFAULT_SERVICE_URL;
+        } catch (e) {
+            console.error('Failed to load service URL:', e);
+            return DEFAULT_SERVICE_URL;
+        }
+    },
+
+    saveSettings(settings) {
+        try {
+            localStorage.setItem('wx_channel_settings', JSON.stringify(settings));
+            return true;
+        } catch (e) {
+            console.error('Failed to save settings:', e);
+            return false;
+        }
+    },
+
+    loadSettings() {
+        try {
+            const data = localStorage.getItem('wx_channel_settings');
+            return data ? JSON.parse(data) : null;
+        } catch (e) {
+            console.error('Failed to load settings:', e);
+            return null;
+        }
+    }
+};
+
+// ============================================
+// Operation Queue
+// ============================================
+const OperationQueue = {
+    queue: [],
+    maxRetries: 3,
+
+    add(operation) {
+        operation.retries = operation.retries || 0;
+        this.queue.push(operation);
+        if (ConnectionManager.getStatus() === 'connected') {
+            this.executeAll();
+        }
+    },
+
+    async executeAll() {
+        while (this.queue.length > 0 && ConnectionManager.getStatus() === 'connected') {
+            const operation = this.queue.shift();
+            try {
+                await this.execute(operation);
+            } catch (e) {
+                console.error('Operation failed:', e);
+                if (operation.retries < this.maxRetries) {
+                    operation.retries++;
+                    this.queue.unshift(operation);
+                } else {
+                    console.error('Operation exceeded max retries:', operation);
+                    showMessage(`操作失败: ${operation.type}`, 'error');
+                }
+                break;
+            }
+        }
+    },
+
+    async execute(operation) {
+        const { method, endpoint, data } = operation;
+        return await ApiClient.request(method, endpoint, data);
+    },
+
+    clear() { this.queue = []; },
+    getQueueLength() { return this.queue.length; }
+};
+
+// ============================================
+// Connection Manager
+// ============================================
+const ConnectionManager = {
+    status: 'disconnected',
+    serviceUrl: DEFAULT_SERVICE_URL,
+    reconnectAttempt: 0,
+    reconnectTimer: null,
+    statusCallbacks: [],
+
+    // Get service URL with protocol detection for Mixed Content handling
+    getServiceUrl() {
+        // If serviceUrl is already set and contains protocol, use it as-is
+        if (this.serviceUrl && (this.serviceUrl.startsWith('http://') || this.serviceUrl.startsWith('https://'))) {
+            // If current page is HTTPS and serviceUrl is HTTP, use protocol-relative URL
+            if (window.location.protocol === 'https:' && this.serviceUrl.startsWith('http://')) {
+                // Extract host and port from serviceUrl
+                try {
+                    const url = new URL(this.serviceUrl);
+                    return `//${url.host}${url.pathname}`.replace(/\/$/, '');
+                } catch (e) {
+                    // If URL parsing fails, return as-is
+                    return this.serviceUrl;
+                }
+            }
+            return this.serviceUrl;
+        }
+        return this.serviceUrl || DEFAULT_SERVICE_URL;
+    },
+
+    async connect(url) {
+        if (url) {
+            this.serviceUrl = url;
+            StorageManager.saveServiceUrl(url);
+        }
+
+        this.setStatus('connecting');
+
+        try {
+            const serviceUrl = this.getServiceUrl();
+            const response = await fetch(`${serviceUrl}/api/health`, {
+                method: 'GET',
+                headers: (() => {
+                    const token = getLocalAuthToken();
+                    return token ? { 'X-Local-Auth': token } : {};
+                })(),
+                signal: AbortSignal.timeout(5000)
+            });
+
+            if (response.ok) {
+                this.setStatus('connected');
+                this.reconnectAttempt = 0;
+                WebSocketClient.connect();
+                return true;
+            } else {
+                this.setStatus('error');
+                return false;
+            }
+        } catch (e) {
+            console.error('Connection failed:', e);
+            this.setStatus('disconnected');
+            this.scheduleReconnect();
+            return false;
+        }
+    },
+
+    disconnect() {
+        this.setStatus('disconnected');
+        this.clearReconnectTimer();
+        WebSocketClient.disconnect();
+    },
+
+    async retry() {
+        this.reconnectAttempt = 0;
+        return await this.connect();
+    },
+
+    scheduleReconnect() {
+        this.clearReconnectTimer();
+        const delay = RECONNECT_DELAYS[Math.min(this.reconnectAttempt, RECONNECT_DELAYS.length - 1)];
+        this.reconnectAttempt++;
+        console.log(`Scheduling reconnect in ${delay}ms (attempt ${this.reconnectAttempt})`);
+        this.reconnectTimer = setTimeout(() => this.connect(), delay);
+    },
+
+    clearReconnectTimer() {
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
+    },
+
+    setStatus(status) {
+        this.status = status;
+        this.updateStatusUI();
+        this.statusCallbacks.forEach(cb => cb(status));
+        if (status === 'connected') {
+            OperationQueue.executeAll();
+        }
+    },
+
+    getStatus() { return this.status; },
+
+    onStatusChange(callback) {
+        this.statusCallbacks.push(callback);
+    },
+
+    updateStatusUI() {
+        const dot = document.getElementById('statusDot');
+        const text = document.getElementById('statusText');
+        if (!dot || !text) return;
+
+        dot.className = 'status-dot';
+
+        switch (this.status) {
+            case 'connected':
+                dot.classList.add('connected');
+                text.textContent = '已连接';
+                break;
+            case 'connecting':
+                dot.classList.add('connecting');
+                text.textContent = '连接中...';
+                break;
+            case 'error':
+                text.textContent = '连接错误';
+                break;
+            default:
+                text.textContent = '未连接';
+        }
+    }
+};
+
+// ============================================
+// API Client
+// ============================================
+const ApiClient = {
+    async request(method, endpoint, data = null) {
+        if (ConnectionManager.getStatus() !== 'connected') {
+            throw new Error('Not connected to service');
+        }
+
+        const serviceUrl = ConnectionManager.getServiceUrl();
+        const url = `${serviceUrl}/api${endpoint}`;
+        const options = {
+            method,
+            headers: { 'Content-Type': 'application/json' }
+        };
+        const token = getLocalAuthToken();
+        if (token) {
+            options.headers['X-Local-Auth'] = token;
+        }
+
+        if (data && (method === 'POST' || method === 'PUT' || method === 'DELETE')) {
+            options.body = JSON.stringify(data);
+        }
+
+        const response = await fetch(url, options);
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+            throw new Error(error.message || error.error || `HTTP ${response.status}`);
+        }
+
+        return await response.json();
+    },
+
+    // Browse History
+    async getBrowseHistory(params = {}) {
+        const query = new URLSearchParams(params).toString();
+        return await this.request('GET', `/browse${query ? '?' + query : ''}`);
+    },
+    async getBrowseRecord(id) { return await this.request('GET', `/browse/${id}`); },
+    async deleteBrowseRecords(ids) { return await this.request('DELETE', '/browse', { ids }); },
+    async clearBrowseHistory() { return await this.request('DELETE', '/browse/clear'); },
+
+    // Download Records
+    async getDownloadRecords(params = {}) {
+        const query = new URLSearchParams(params).toString();
+        return await this.request('GET', `/downloads${query ? '?' + query : ''}`);
+    },
+    async getDownloadRecord(id) { return await this.request('GET', `/downloads/${id}`); },
+    async deleteDownloadRecords(ids, deleteFiles = false) { return await this.request('DELETE', '/downloads', { ids, deleteFiles }); },
+    async clearDownloadRecords(deleteFiles = false) { return await this.request('DELETE', '/downloads/clear', { deleteFiles }); },
+    async cleanupByDate(type, beforeDate, deleteFiles = false) {
+        const endpoint = type === 'browse' ? '/browse/cleanup' : '/downloads/cleanup';
+        return await this.request('DELETE', endpoint, { beforeDate, deleteFiles });
+    },
+
+    // Download Queue
+    async getDownloadQueue() { return await this.request('GET', '/queue'); },
+    async addToQueue(videos) { return await this.request('POST', '/queue', { videos }); },
+    async pauseDownload(id) { return await this.request('PUT', `/queue/${id}/pause`); },
+    async resumeDownload(id) { return await this.request('PUT', `/queue/${id}/resume`); },
+    async removeFromQueue(id) { return await this.request('DELETE', `/queue/${id}`); },
+    async reorderQueue(ids) { return await this.request('PUT', '/queue/reorder', { ids }); },
+    async completeDownload(id) { return await this.request('PUT', `/queue/${id}/complete`); },
+    async failDownload(id, error) { return await this.request('PUT', `/queue/${id}/fail`, { error }); },
+
+    // Settings
+    async getSettings() { return await this.request('GET', '/settings'); },
+    async updateSettings(settings) { return await this.request('PUT', '/settings', settings); },
+    async resolveSharedFeedLinks(urls) {
+        const result = await this.request('POST', '/search/share/resolve', { urls });
+        if (result && result.code === 0) {
+            return {
+                success: true,
+                data: result.data || {}
+            };
+        }
+        return {
+            success: false,
+            error: result && (result.message || result.error) ? (result.message || result.error) : '未知错误'
+        };
+    },
+
+    // Statistics
+    async getStatistics() { return await this.request('GET', '/stats'); },
+    async getChartData() { return await this.request('GET', '/stats/chart'); },
+
+    // Export
+    async exportData(type, format, ids = null) {
+        const params = { format };
+        if (ids) params.ids = ids.join(',');
+        const query = new URLSearchParams(params).toString();
+        // Use download helper for file download
+        return await this.downloadFile(`/export/${type}?${query}`);
+    },
+
+    // Helper for downloading files
+    async downloadFile(endpoint) {
+        const serviceUrl = ConnectionManager.getServiceUrl();
+        const url = `${serviceUrl}/api${endpoint}`;
+
+        try {
+            const options = { headers: {} };
+            const token = getLocalAuthToken();
+            if (token) options.headers['X-Local-Auth'] = token;
+            const response = await fetch(url, options);
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+                throw new Error(error.message || error.error || 'Download failed');
+            }
+
+            // Get filename from header
+            let filename = 'export.txt';
+            const disposition = response.headers.get('Content-Disposition');
+            if (disposition && disposition.indexOf('attachment') !== -1) {
+                const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+                const matches = filenameRegex.exec(disposition);
+                if (matches != null && matches[1]) {
+                    filename = matches[1].replace(/['"]/g, '');
+                    // Decode filename if it's URL encoded (common in headers)
+                    try { filename = decodeURIComponent(filename); } catch (e) { }
+                }
+            }
+
+            const blob = await response.blob();
+            return { success: true, blob, filename };
+        } catch (e) {
+            console.error('Download failed:', e);
+            throw e;
+        }
+    },
+
+    // Search
+    async search(query) { return await this.request('GET', `/search?q=${encodeURIComponent(query)}`); },
+
+    // Official Accounts
+    async getOfficialAccounts(params = {}) {
+        const query = new URLSearchParams();
+        const keyword = String(params.keyword || '').trim();
+        if (keyword) query.set('keyword', keyword);
+        if (params.page) query.set('page', String(params.page));
+        if (params.page_size) query.set('page_size', String(params.page_size));
+        const suffix = query.toString() ? `?${query.toString()}` : '';
+        return await this.request('GET', `/mp/list${suffix}`);
+    },
+    async getOfficialArticles(params = {}) {
+        const query = new URLSearchParams();
+        ['biz', 'keyword', 'archive_status', 'sort'].forEach((name) => {
+            const value = String(params[name] || '').trim();
+            if (value) query.set(name, value);
+        });
+        if (params.page) query.set('page', String(params.page));
+        if (params.page_size) query.set('page_size', String(params.page_size));
+        if (params.descending !== undefined) query.set('descending', String(Boolean(params.descending)));
+        const suffix = query.toString() ? `?${query.toString()}` : '';
+        return await this.request('GET', `/mp/articles${suffix}`);
+    },
+    async getOfficialSyncStatus(biz, mode = 'history') {
+        const query = new URLSearchParams({ biz: String(biz || '').trim(), mode });
+        return await this.request('GET', `/mp/sync?${query.toString()}`);
+    },
+    async startOfficialSync(biz, mode = 'history', resume = true) {
+        return await this.request('POST', '/mp/sync', { biz, mode, resume });
+    },
+    async cancelOfficialSync(id) {
+        return await this.request('DELETE', `/mp/sync/${encodeURIComponent(String(id || ''))}`);
+    },
+    async getOfficialMetricSyncStatus(biz) {
+        const query = new URLSearchParams({ biz: String(biz || '').trim() });
+        return await this.request('GET', `/mp/metrics/sync?${query.toString()}`);
+    },
+    async startOfficialMetricSync(biz, force = false, resume = true) {
+        return await this.request('POST', '/mp/metrics/sync', { biz, force, resume });
+    },
+    async cancelOfficialMetricSync(id) {
+        return await this.request('DELETE', `/mp/metrics/sync/${encodeURIComponent(String(id || ''))}`);
+    },
+    async downloadOfficialCatalog(format = 'json') {
+        return await this.downloadFile(`/mp/catalog/export?format=${encodeURIComponent(format)}`);
+    },
+    async importOfficialCatalog(file, options = {}) {
+        if (!file) throw new Error('请选择目录文件');
+        const query = new URLSearchParams();
+        if (options.conflictPolicy) query.set('conflict_policy', options.conflictPolicy);
+        if (options.dryRun !== undefined) query.set('dry_run', String(Boolean(options.dryRun)));
+        const serviceUrl = ConnectionManager.getServiceUrl();
+        const suffix = query.toString() ? `?${query.toString()}` : '';
+        const headers = { 'Content-Type': file.type || 'application/octet-stream' };
+        const token = getLocalAuthToken();
+        if (token) headers['X-Local-Auth'] = token;
+        const response = await fetch(`${serviceUrl}/api/mp/catalog/import${suffix}`, {
+            method: 'POST',
+            headers,
+            body: file
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || (payload && payload.code !== undefined && Number(payload.code) !== 0)) {
+            throw new Error(payload.message || payload.error || `HTTP ${response.status}`);
+        }
+        return payload;
+    },
+
+    // Batch Download
+    async startBatchDownload(videos, forceRedownload = false) {
+        const serviceUrl = ConnectionManager.getServiceUrl();
+        const url = `${serviceUrl}/__wx_channels_api/batch_start`;
+            const options = {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ videos, forceRedownload })
+            };
+            const token = getLocalAuthToken();
+            if (token) options.headers['X-Local-Auth'] = token;
+            const response = await fetch(url, options);
+            const result = await response.json();
+            
+            // 兼容两种响应格式
+            if (result.code === 0 && result.data) {
+                // 新格式: {code: 0, message: "success", data: {...}}
+                return {
+                    success: true,
+                    ...result.data
+                };
+            } else if (result.code !== undefined && result.code !== 0) {
+                // 错误格式: {code: xxx, message: "error"}
+                return {
+                    success: false,
+                    error: result.message || '未知错误'
+                };
+            }
+            // 旧格式: {success: true, ...}
+            return result;
+        },
+    async getBatchProgress() {
+        const serviceUrl = ConnectionManager.getServiceUrl();
+        const url = `${serviceUrl}/__wx_channels_api/batch_progress`;
+            const options = { headers: {} };
+            const token = getLocalAuthToken();
+            if (token) options.headers['X-Local-Auth'] = token;
+            const response = await fetch(url, options);
+            const result = await response.json();
+            
+            // 兼容两种响应格式
+            if (result.code === 0 && result.data) {
+                // 新格式: {code: 0, message: "success", data: {...}}
+                return {
+                    success: true,
+                    ...result.data
+                };
+            }
+            // 旧格式: {success: true, ...}
+            return result;
+        },
+    async cancelBatchDownload() {
+        const serviceUrl = ConnectionManager.getServiceUrl();
+        const url = `${serviceUrl}/__wx_channels_api/batch_cancel`;
+            const options = { method: 'POST', headers: {} };
+            const token = getLocalAuthToken();
+            if (token) options.headers['X-Local-Auth'] = token;
+            const response = await fetch(url, options);
+            return await response.json();
+        },
+    async resumeBatchDownload(forceRedownload = false) {
+        const serviceUrl = ConnectionManager.getServiceUrl();
+        const url = `${serviceUrl}/__wx_channels_api/batch_resume`;
+            const options = {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ forceRedownload })
+            };
+            const token = getLocalAuthToken();
+            if (token) options.headers['X-Local-Auth'] = token;
+            const response = await fetch(url, options);
+            return await response.json();
+        },
+    async clearBatchTasks() {
+        const serviceUrl = ConnectionManager.getServiceUrl();
+        const url = `${serviceUrl}/__wx_channels_api/batch_clear`;
+            const options = { method: 'POST', headers: {} };
+            const token = getLocalAuthToken();
+            if (token) options.headers['X-Local-Auth'] = token;
+            const response = await fetch(url, options);
+            return await response.json();
+        },
+
+    // File operations
+    async openFolder(filePath) { return await this.request('POST', '/files/open-folder', { path: filePath }); },
+    async playVideo(filePath) { return await this.request('POST', '/files/play', { path: filePath }); },
+    async retryDownloadRecord(id) { return await this.request('POST', `/downloads/${id}/retry`); }
+};
+
+// ============================================
+// WebSocket Client
+// ============================================
+const WebSocketClient = {
+    ws: null,
+    reconnectTimer: null,
+    callbacks: {
+        downloadProgress: [],
+        queueChange: [],
+        statsUpdate: []
+    },
+
+    connect() {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
+
+        const serviceUrl = new URL(ConnectionManager.serviceUrl);
+        const wsPort = parseInt(serviceUrl.port || '2025') + 1;
+        let wsUrl = `ws://${serviceUrl.hostname}:${wsPort}/ws`;
+        const token = getLocalAuthToken();
+        if (token) {
+            wsUrl += `?token=${encodeURIComponent(token)}`;
+        }
+
+        try {
+            this.ws = new WebSocket(wsUrl);
+            this.ws.onopen = () => console.log('WebSocket connected');
+            this.ws.onmessage = (event) => {
+                try {
+                    const message = JSON.parse(event.data);
+                    this.handleMessage(message);
+                } catch (e) {
+                    console.error('Failed to parse WebSocket message:', e);
+                }
+            };
+            this.ws.onclose = () => {
+                console.log('WebSocket disconnected');
+                this.scheduleReconnect();
+            };
+            this.ws.onerror = (error) => console.error('WebSocket error:', error);
+        } catch (e) {
+            console.error('Failed to create WebSocket:', e);
+        }
+    },
+
+    disconnect() {
+        this.clearReconnectTimer();
+        if (this.ws) {
+            this.ws.close();
+            this.ws = null;
+        }
+    },
+
+    scheduleReconnect() {
+        this.clearReconnectTimer();
+        if (ConnectionManager.getStatus() === 'connected') {
+            this.reconnectTimer = setTimeout(() => this.connect(), 5000);
+        }
+    },
+
+    clearReconnectTimer() {
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
+    },
+
+    handleMessage(message) {
+        switch (message.type) {
+            case 'download_progress':
+                this.callbacks.downloadProgress.forEach(cb => cb(message));
+                break;
+            case 'queue_change':
+                this.callbacks.queueChange.forEach(cb => cb(message));
+                break;
+            case 'stats_update':
+                this.callbacks.statsUpdate.forEach(cb => cb(message));
+                break;
+        }
+    },
+
+    onDownloadProgress(callback) { this.callbacks.downloadProgress.push(callback); },
+    onQueueChange(callback) { this.callbacks.queueChange.push(callback); },
+    onStatsUpdate(callback) { this.callbacks.statsUpdate.push(callback); }
+};
+
+console.log('Core module loaded');

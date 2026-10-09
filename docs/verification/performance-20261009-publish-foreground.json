@@ -1,0 +1,22 @@
+{
+  "scenario": "Synthetic UI: 1000 media cards, 5 progress tasks, navigation and virtualized scrolling. No network workload.",
+  "recordedAt": "2026-10-09T22:20:17.0280407+08:00",
+  "durationSeconds": 67.0167598,
+  "os": "Microsoft Windows NT 10.0.26200.0",
+  "processors": 24,
+  "renderCallbackIntervals": {
+    "samples": 3866,
+    "medianMs": 16.663300000000163,
+    "p95Ms": 18.980599999998958,
+    "maximumMs": 76.79630000000179,
+    "stallsOver100Ms": 0
+  },
+  "uiDispatcherIntervals": {
+    "samples": 2181,
+    "medianMs": 30.76810000000023,
+    "p95Ms": 32.968800000002375,
+    "maximumMs": 112.44260000000031,
+    "stallsOver100Ms": 2
+  },
+  "note": "Render callbacks and UI dispatcher intervals; these are responsiveness measurements, not GPU presented-frame measurements."
+}

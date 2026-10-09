@@ -1,0 +1,57 @@
+# 微信视频号下载助手 - 配置文件示例
+# 复制此文件为 config.yaml 并修改相应配置
+
+# ============================================
+# 云端集成配置
+# ============================================
+
+# === 云端管理功能 ===
+# 客户端通过 WebSocket 连接到 Insight Edge
+# 用途：实时控制、页面能力状态和任务协同
+cloud_enabled: true
+
+# Insight Edge 的 WebSocket 地址
+cloud_hub_url: "ws://127.0.0.1:18081/ws/client"
+
+# 是否自动打开并检查视频号页面
+# Cloud 版默认开启；标准版和 Radar 版默认关闭，可在此处覆盖
+auto_open_channels: true
+
+# 云端通信密钥（可选，用于加密通信）
+cloud_secret: ""
+
+# 设备标识（自动生成，请勿手动修改）
+# 用于在云端唯一标识此设备
+machine_id: ""
+
+# ============================================
+# 使用场景说明
+# ============================================
+# 场景 1: 完整功能（推荐）
+#   cloud_enabled: true
+#   → Insight Edge 实时控制 + 页面能力状态
+#
+# 场景 2: 独立运行
+#   cloud_enabled: false
+#   → 完全独立运行，不连接 Insight Edge
+
+# === 功能开关 ===
+# 是否启用对标雷达
+# false: 默认关闭，仅展示雷达页面和配置
+# true: 启用后台自动监控，修改后需重启程序
+radar_enabled: false
+
+# 浏览器来源白名单。保留这些内置来源才能使用控制台、视频号和公众号页面功能。
+allowed_origins:
+  - "http://127.0.0.1:2025"
+  - "http://localhost:2025"
+  - "https://channels.weixin.qq.com"
+  - "https://mp.weixin.qq.com"
+
+# 下载文件名模板（留空则使用默认标题命名）
+# 可用变量: {date} {datetime} {author} {title} {duration} {video_id} {size}
+download_filename_template: ""
+
+# === 其他配置 ===
+# 根据需要添加其他配置项
+# 详见完整配置文档

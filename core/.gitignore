@@ -1,0 +1,217 @@
+# 微信视频号下载助手 - Git 忽略文件
+
+# ==================== 开发文档 ====================
+# 开发文档不同步到 GitHub（包含内部技术细节）
+dev-docs/
+docs/aegis/
+
+# ==================== 运行时生成的目录 ====================
+# 下载目录（用户下载的视频文件）
+downloads/
+
+# 日志目录（运行日志）
+logs/
+
+# Local tool/runtime caches
+.codegraph/
+.codex-cache/
+.tmp_runtime/
+# ==================== 压缩文件 ====================
+# 所有压缩文件
+*.zip
+*.rar
+*.7z
+*.tar
+*.tar.gz
+*.tgz
+
+# ==================== 编译产物 ====================
+# Go 编译产物
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# 测试二进制文件
+*.test
+
+# 输出目录
+/bin/
+/build/
+/dist/
+.worktrees/
+
+# ==================== 临时文件 ====================
+# 临时文件
+*.tmp
+*.temp
+*.swp
+*.swo
+*.syso
+*~
+
+# 备份文件
+*.bak
+*.backup
+
+# ==================== 系统文件 ====================
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Linux
+*~
+
+# ==================== IDE 和编辑器 ====================
+# Visual Studio Code
+.vscode/
+*.code-workspace
+.agent
+
+# GoLand / IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+[._]s[a-rt-v][a-z]
+[._]ss[a-gi-z]
+[._]sw[a-p]
+
+# ==================== Go 相关 ====================
+# 依赖目录
+/vendor/
+
+# Go 工作区文件
+go.work
+go.work.sum
+
+# ==================== 配置文件 ====================
+# 配置文件（包含敏感信息）
+config.yaml
+
+# 本地配置文件（如果有）
+config.local.yaml
+config.local.json
+*.local.*
+hardware_fingerprint.json
+
+# 配置备份文件
+config.yaml---
+config.yaml----
+config.yaml.backup
+config.yaml[0-9]
+config.yaml[0-9][0-9]
+
+# 环境变量文件
+.env
+.env.local
+.env.*.local
+
+# ==================== 证书文件 ====================
+# 证书目录（如果包含敏感信息）
+# certs/*.pem
+# certs/*.key
+
+# ==================== 数据文件 ====================
+# CSV 记录文件
+download_records.csv
+*.csv
+
+# 数据库文件
+*.db
+*.sqlite
+*.sqlite3
+
+# 数据库临时文件
+*.db-shm
+*.db-wal
+*.db-journal
+
+# ==================== 测试和脚本 ====================
+# 测试脚本目录
+scripts/*
+!scripts/build-dual.ps1
+!scripts/build-variants.ps1
+!scripts/start-insight-data-plane.ps1
+!scripts/switch-insight-data-plane.ps1
+!scripts/switch-insight-data-plane-admin.ps1
+!scripts/switch-insight-data-plane-admin.cmd
+!scripts/insight_data_plane_script_test.go
+
+# 测试文件应纳入版本控制（单元测试是源码的一部分）
+
+# ==================== 其他 ====================
+# 帮助输出
+help_output.txt
+
+# 测试覆盖率
+*.out
+coverage.txt
+coverage.html
+
+# 性能分析
+*.prof
+*.pprof
+
+# 体积分析报告（临时文件）
+size_report.txt
+
+# ==================== 发版准备文件 ====================
+# 这些文件仅用于本地发版准备，不需要同步到 GitHub
+LINKS_FIXED.md
+PRE_RELEASE_CHECKLIST.md
+READY_TO_RELEASE.md
+RELEASE_GUIDE.md
+RELEASE_v*.md
+GITHUB_RELEASE_STEPS.md
+PRE_UPLOAD_CHECKLIST.md
+UPLOAD_READY.md
+
+# 临时图片文件
+down.png
+log.png
+
+# 临时构建缓存
+.tmp_gocache/
+
+# ==================== 保留的文件 ====================
+# 确保某些文件被包含（使用 ! 前缀）
+!.gitignore
+!.gitkeep
+
+# ==================== 说明 ====================
+# 此文件定义了不需要同步到 GitHub 的文件和目录
+# 
+# 主要排除：
+# - dev-docs/     开发文档（内部技术细节）❌ 不上传
+# - docs/aegis/   Aegis 开发过程文档 ❌ 不上传
+# - config.yaml   配置文件（包含敏感信息）❌ 不上传
+# - scripts/      测试脚本目录默认不上传，`build-dual.ps1` 例外 ✅
+# - downloads/    下载的视频文件
+# - logs/         运行日志
+# - web/          Web 控制台源代码（暂不公开）
+# - *.zip         所有压缩文件
+# - *.exe         编译产物
+# - *.db          数据库文件
+# 
+# 包含的内容：
+# - docs/              用户文档 ✅
+# - README.md          项目主文档 ✅
+# - config.yaml.example 配置文件示例 ✅
+# - 源代码             所有源代码 ✅

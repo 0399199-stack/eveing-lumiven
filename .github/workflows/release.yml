@@ -1,0 +1,48 @@
+name: Verified Windows release
+on:
+  push:
+    tags: [v1.0.0]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Existing verified release tag (v1.0.0)
+        required: true
+        default: v1.0.0
+permissions:
+  contents: read
+jobs:
+  release:
+    runs-on: windows-2025
+    timeout-minutes: 45
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.inputs.version || github.ref_name }}
+          fetch-depth: 0
+      - name: Check exact release tag
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.event.inputs.version || github.ref_name }}
+        run: |
+          if ($env:RELEASE_TAG -ne 'v1.0.0') { throw 'Only the verified 1.0.0 release is configured.' }
+          if ((git rev-parse HEAD) -ne (git rev-parse "$($env:RELEASE_TAG)^{commit}")) { throw 'Release source does not match tag.' }
+      - name: Install verified fixed toolchains
+        shell: pwsh
+        run: ./scripts/Prepare-Tools.ps1 -IncludeInstaller
+      - name: Build all release files
+        shell: pwsh
+        run: ./scripts/Build.ps1 -Installer -SourceArchive -Version 1.0.0
+      - name: Require actual completed acceptance record
+        shell: pwsh
+        run: ./scripts/Validate-Release.ps1 -Version 1.0.0
+      - name: Publish matching executable and source
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create v1.0.0 artifacts/release/EVEING-Lumiven-Setup-1.0.0-x64.exe artifacts/release/EVEING-Lumiven-Source-1.0.0.zip artifacts/release/SHA256SUMS --verify-tag --title 'EVEING Lumiven 1.0.0' --notes-file docs/RELEASE-NOTES.md
+

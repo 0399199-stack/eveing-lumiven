@@ -1,0 +1,27 @@
+{
+  "dotnet": {
+    "version": "10.0.401",
+    "url": "https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.401/dotnet-sdk-10.0.401-win-x64.zip",
+    "sha512": "24b670ad3d923bfcf47df6c3b034152398b42f6dbc388e10d783aee1cfb5e5817d399fc0ae2a12cfa822a55e61d34830ccb15c50ef6efee437ab874bb7c79430"
+  },
+  "go": {
+    "version": "1.27.1",
+    "url": "https://go.dev/dl/go1.27.1.windows-amd64.zip",
+    "sha256": "a3911b5e0e1b1053f25ed0675f4c1c6aad1e2bfcf253df2b9be4caabd2edd95d"
+  },
+  "node": {
+    "version": "24.19.0",
+    "url": "https://nodejs.org/dist/v24.19.0/node-v24.19.0-win-x64.zip",
+    "sha256": "57f71ab3652e797d84acddc79c81cc9ff1c6ddb2a1974cdb83f00fee9bff4c73"
+  },
+  "zig": {
+    "version": "0.13.0",
+    "url": "https://ziglang.org/download/0.13.0/zig-windows-x86_64-0.13.0.zip",
+    "sha256": "d859994725ef9402381e557c60bb57497215682e355204d754ee3df75ee3c158"
+  },
+  "inno": {
+    "version": "6.5.4",
+    "url": "https://github.com/jrsoftware/issrc/releases/download/is-6_5_4/innosetup-6.5.4.exe",
+    "sha256": "fa73bf47a4da250d185d07561c2bfda387e5e20db77e4570004cf6a133cc10b1"
+  }
+}

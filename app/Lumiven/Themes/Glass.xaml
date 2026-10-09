@@ -1,0 +1,104 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:Lumiven.Controls">
+  <ResourceDictionary.ThemeDictionaries>
+    <ResourceDictionary x:Key="Light">
+      <LinearGradientBrush x:Key="CanvasBrush" StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#F4F5F7" Offset="0"/><GradientStop Color="#F9FAFC" Offset="0.54"/><GradientStop Color="#EEF1F5" Offset="1"/></LinearGradientBrush>
+      <SolidColorBrush x:Key="CanvasSolidBrush" Color="#F4F5F7" />
+      <AcrylicBrush x:Key="GlassBrush" TintColor="#FFFFFF" TintOpacity="0.68" FallbackColor="#F7F8FA" />
+      <SolidColorBrush x:Key="GlassSolidBrush" Color="#F7F8FA" />
+      <AcrylicBrush x:Key="CardBrush" TintColor="#FFFFFF" TintOpacity="0.82" FallbackColor="#FBFCFD" />
+      <LinearGradientBrush x:Key="GlassEdgeBrush" StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#FFFFFFFF" Offset="0"/><GradientStop Color="#D8FFFFFF" Offset="0.4"/><GradientStop Color="#9BC8D3DF" Offset="0.78"/><GradientStop Color="#FFFFFFFF" Offset="1"/></LinearGradientBrush>
+      <SolidColorBrush x:Key="PrimaryBrush" Color="#102854" />
+      <SolidColorBrush x:Key="MutedBrush" Color="#71849E" />
+      <SolidColorBrush x:Key="SurfaceBrush" Color="#E7ECF2" />
+      <SolidColorBrush x:Key="DividerBrush" Color="#C9D4E0" />
+      <SolidColorBrush x:Key="AccentBrush" Color="#2475E4" />
+      <SolidColorBrush x:Key="AccentSoftBrush" Color="#DDEBFC" />
+      <SolidColorBrush x:Key="PanelShadeBrush" Color="#233D5E83" />
+      <LinearGradientBrush x:Key="SelectionBrush" StartPoint="0,0" EndPoint="1,0"><GradientStop Color="#F6FCFF"/><GradientStop Color="#DCEBFE" Offset="1"/></LinearGradientBrush>
+      <SolidColorBrush x:Key="SelectionEdgeBrush" Color="#DEFFFFFF" />
+      <LinearGradientBrush x:Key="HighlightBrush" StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#FFFFFFFF"/><GradientStop Color="#00FFFFFF" Offset="0.5"/><GradientStop Color="#88FFFFFF" Offset="1"/></LinearGradientBrush>
+      <SolidColorBrush x:Key="GlowOne" Color="#25D5EAFB" />
+      <SolidColorBrush x:Key="GlowTwo" Color="#20FAEAD8" />
+      <SolidColorBrush x:Key="GlowThree" Color="#16C4D8F1" />
+      <AcrylicBrush x:Key="SidebarBrush" TintColor="#FFFFFF" TintOpacity="0.54" FallbackColor="#F5F7FA" />
+    </ResourceDictionary>
+    <ResourceDictionary x:Key="Default">
+      <LinearGradientBrush x:Key="CanvasBrush" StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#153B57"/><GradientStop Color="#0C2C45" Offset="0.5"/><GradientStop Color="#173F5C" Offset="1"/></LinearGradientBrush>
+      <SolidColorBrush x:Key="CanvasSolidBrush" Color="#10283B" />
+      <AcrylicBrush x:Key="GlassBrush" TintColor="#254663" TintOpacity="0.48" FallbackColor="#243E52" />
+      <SolidColorBrush x:Key="GlassSolidBrush" Color="#243E52" />
+      <AcrylicBrush x:Key="CardBrush" TintColor="#294960" TintOpacity="0.68" FallbackColor="#294960" />
+      <LinearGradientBrush x:Key="GlassEdgeBrush" StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#7ED6F5FF" Offset="0"/><GradientStop Color="#33D6F5FF" Offset="0.3"/><GradientStop Color="#123CBDE5" Offset="0.7"/><GradientStop Color="#48D6F5FF" Offset="1"/></LinearGradientBrush>
+      <SolidColorBrush x:Key="PrimaryBrush" Color="#E8F8FF" />
+      <SolidColorBrush x:Key="MutedBrush" Color="#9EBCCF" />
+      <SolidColorBrush x:Key="SurfaceBrush" Color="#752E526C" />
+      <SolidColorBrush x:Key="DividerBrush" Color="#3189BADC" />
+      <SolidColorBrush x:Key="AccentBrush" Color="#8DDCFF" />
+      <SolidColorBrush x:Key="AccentSoftBrush" Color="#287ACCED" />
+      <SolidColorBrush x:Key="PanelShadeBrush" Color="#45102335" />
+      <SolidColorBrush x:Key="SelectionBrush" Color="#344E69" />
+      <SolidColorBrush x:Key="SelectionEdgeBrush" Color="#526D89" />
+      <LinearGradientBrush x:Key="HighlightBrush" StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#48D6F5FF"/><GradientStop Color="#00D6F5FF" Offset="0.5"/><GradientStop Color="#20D6F5FF" Offset="1"/></LinearGradientBrush>
+      <SolidColorBrush x:Key="GlowOne" Color="#35268AAE" />
+      <SolidColorBrush x:Key="GlowTwo" Color="#36514C9D" />
+      <SolidColorBrush x:Key="GlowThree" Color="#20327D70" />
+      <AcrylicBrush x:Key="SidebarBrush" TintColor="#172F43" TintOpacity="0.66" FallbackColor="#172F43" />
+    </ResourceDictionary>
+  </ResourceDictionary.ThemeDictionaries>
+  <Style x:Key="GlassPanel" TargetType="Border">
+    <Setter Property="Background" Value="{ThemeResource GlassBrush}" />
+    <Setter Property="BorderBrush" Value="{ThemeResource GlassEdgeBrush}" />
+    <Setter Property="BorderThickness" Value="1.3" />
+    <Setter Property="CornerRadius" Value="24" />
+    <Setter Property="Padding" Value="24" />
+  </Style>
+  <Style x:Key="CardPanel" TargetType="Border" BasedOn="{StaticResource GlassPanel}">
+    <Setter Property="Background" Value="{ThemeResource CardBrush}" />
+  </Style>
+  <Style x:Key="GlassButton" TargetType="Button">
+    <Setter Property="Background" Value="{ThemeResource CardBrush}" />
+    <Setter Property="Foreground" Value="{ThemeResource PrimaryBrush}" />
+    <Setter Property="BorderBrush" Value="{ThemeResource GlassEdgeBrush}" />
+    <Setter Property="CornerRadius" Value="15" />
+    <Setter Property="Padding" Value="16,11" />
+    <Setter Property="controls:Motion.Enabled" Value="True" />
+  </Style>
+  <Style x:Key="NavButton" TargetType="Button" BasedOn="{StaticResource GlassButton}">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="Height" Value="53" />
+    <Setter Property="FontSize" Value="15" />
+    <Setter Property="CornerRadius" Value="17" />
+    <Setter Property="Padding" Value="26,9" />
+  </Style>
+  <Style x:Key="IceAccentButton" TargetType="Button" BasedOn="{StaticResource AccentButtonStyle}">
+    <Setter Property="Background" Value="#1A8FCB" />
+    <Setter Property="Foreground" Value="White" />
+    <Setter Property="BorderBrush" Value="#B9EAFF" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="Padding" Value="18,12" />
+    <Setter Property="controls:Motion.Enabled" Value="True" />
+  </Style>
+  <Style x:Key="PageTitle" TargetType="TextBlock">
+    <Setter Property="FontSize" Value="32" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{ThemeResource PrimaryBrush}" />
+  </Style>
+  <Style TargetType="controls:LineIcon"><Setter Property="Foreground" Value="{ThemeResource PrimaryBrush}"/><Setter Property="Width" Value="22"/><Setter Property="Height" Value="22"/></Style>
+  <controls:NonEmptyVisibilityConverter x:Key="NonEmptyVisibilityConverter" />
+  <controls:MissingVisibilityConverter x:Key="MissingVisibilityConverter" />
+  <Style x:Key="MutedText" TargetType="TextBlock">
+    <Setter Property="Foreground" Value="{ThemeResource MutedBrush}" />
+    <Setter Property="FontSize" Value="13" />
+  </Style>
+  <controls:StatusConverter x:Key="StatusConverter" />
+  <controls:FileSizeConverter x:Key="FileSizeConverter" />
+  <controls:DateConverter x:Key="DateConverter" />
+  <controls:ThumbnailConverter x:Key="ThumbnailConverter" />
+  <controls:MissingConverter x:Key="MissingConverter" />
+</ResourceDictionary>

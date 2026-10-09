@@ -1,0 +1,23 @@
+EVEING Lumiven
+Copyright (c) 2026 EVEING
+Contact: 0399199@gmail.com
+
+EVEING-authored additions and the combined Gopeed-based application are
+distributed under GNU GPL version 3 only. See LICENSE.
+Upstream components retain their original copyright and license notices.
+
+Based on nobiyou/wx_channel:
+https://github.com/nobiyou/wx_channel
+Source baseline: 889abf890cc14772beccfc8933f7c6e699269c55
+Copyright (c) 2025 nobiyou, MIT. See core/LICENSE.
+
+SunnyNet: https://github.com/qtgolang/SunnyNet
+Copyright (c) 2025 Qin Tian (秦天), MIT.
+The bundled fork has been adapted for an explicit local proxy workflow.
+Commercial NetFilter SDK driver, API binaries and derived bindings are
+excluded. See docs/PROVENANCE.md and THIRD-PARTY-NOTICES.md.
+
+No affiliation with or endorsement by Tencent, WeChat, or upstream authors
+is implied. EVEING provides this software free of charge. This pricing choice
+does not add a non-commercial restriction to the GPL license.
+

@@ -1,0 +1,501 @@
+package websocket
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"wx_channel/internal/utils"
+
+	"github.com/coder/websocket"
+	json "github.com/json-iterator/go"
+)
+
+// The functional probe runs less frequently than the transport heartbeat, so
+// allow a few probe intervals before an otherwise application-live page is
+// considered stale.
+const defaultAPIFunctionalLivenessTimeout = 3 * defaultLivenessTimeout
+
+// Client 表示一个 WebSocket 客户端连接
+type Client struct {
+	ID             string // 客户端 ID
+	Conn           *websocket.Conn
+	RemoteAddr     string // 远程地址
+	send           chan []byte
+	hub            *Hub
+	mu             sync.Mutex
+	ctx            context.Context
+	cancel         context.CancelFunc
+	closed         bool
+	lastPing       time.Time
+	lastPong       time.Time
+	lastSeen       time.Time
+	pagePath       string
+	href           string
+	apiReady       bool
+	apiFunctional  bool
+	apiProbeStatus string
+	apiProbeAt     time.Time
+	apiProbeError  string
+	methods        map[string]bool
+	activeRequests int32 // 活跃请求数（原子操作）
+}
+
+// NewClient 创建新的客户端
+func NewClient(conn *websocket.Conn, hub *Hub) *Client {
+	ctx, cancel := context.WithCancel(context.Background())
+	return &Client{
+		Conn:           conn,
+		RemoteAddr:     "unknown",
+		send:           make(chan []byte, 256),
+		hub:            hub,
+		ctx:            ctx,
+		cancel:         cancel,
+		lastPing:       time.Now(),
+		lastSeen:       time.Now(),
+		apiProbeStatus: "unknown",
+		methods:        make(map[string]bool),
+	}
+}
+
+// NewClientWithAddr 创建新的客户端（带远程地址）
+func NewClientWithAddr(conn *websocket.Conn, hub *Hub, remoteAddr string) *Client {
+	ctx, cancel := context.WithCancel(context.Background())
+	return &Client{
+		Conn:           conn,
+		RemoteAddr:     remoteAddr,
+		send:           make(chan []byte, 256),
+		hub:            hub,
+		ctx:            ctx,
+		cancel:         cancel,
+		lastPing:       time.Now(),
+		lastSeen:       time.Now(),
+		apiProbeStatus: "unknown",
+		methods:        make(map[string]bool),
+	}
+}
+
+// ReadPump 从 WebSocket 连接读取消息
+func (c *Client) ReadPump() {
+	defer func() {
+		if r := recover(); r != nil {
+			utils.LogError("ReadPump panic 恢复: %v", r)
+		}
+		c.hub.unregister <- c
+		c.Close()
+	}()
+
+	// 设置最大消息大小为 1MB (而不是之前的10MB，防止恶意大包内存撑爆)
+	c.Conn.SetReadLimit(1 * 1024 * 1024)
+
+	// 启动 ping 循环
+	go c.pingLoop()
+
+	// Create a worker pool to limit concurrent API response processing
+	const numWorkers = 5
+	msgChan := make(chan WSMessage, 50)
+	var wg sync.WaitGroup
+
+	// Start workers
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for msg := range msgChan {
+				func() {
+					defer func() {
+						if r := recover(); r != nil {
+							utils.LogError("API 响应处理 panic: %v", r)
+						}
+					}()
+
+					var resp APICallResponse
+					if err := json.Unmarshal(msg.Data, &resp); err != nil {
+						utils.LogError("API 响应解析失败: %v", err)
+						return
+					}
+					c.hub.handleAPIResponse(resp)
+				}()
+			}
+		}()
+	}
+
+	// Ensure workers are cleaned up
+	defer func() {
+		close(msgChan)
+		wg.Wait()
+	}()
+
+	for {
+
+		// 连接存活由 pingLoop 的协议级 Ping/Pong 负责检测。不要给单次
+		// Read 绑定固定超时，否则后台 WebView 暂停应用层 heartbeat 时，
+		// 仍然能响应协议控制帧的连接也会被误判为空闲。
+		messageType, message, err := c.Conn.Read(c.ctx)
+
+		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) || strings.Contains(err.Error(), "context deadline exceeded") {
+				utils.LogWarn("WebSocket 连接空闲超时，关闭连接: %s", c.RemoteAddr)
+			} else if errors.Is(err, context.Canceled) || strings.Contains(err.Error(), "context canceled") {
+				utils.LogInfo("WebSocket 上下文已取消: %s", c.RemoteAddr)
+			} else {
+				// 检查是否是正常关闭
+				status := websocket.CloseStatus(err)
+				if status == websocket.StatusNormalClosure || status == websocket.StatusGoingAway {
+					utils.LogInfo("WebSocket 正常关闭")
+				} else {
+					utils.LogError("WebSocket 异常关闭: %v (状态码: %d)", err, status)
+				}
+			}
+			break
+		}
+
+		// 只处理文本消息
+		if messageType != websocket.MessageText {
+			continue
+		}
+
+		// 解析消息
+		var msg WSMessage
+		if err := json.Unmarshal(message, &msg); err != nil {
+			utils.LogError("消息解析失败: %v", err)
+			continue
+		}
+		c.Touch()
+
+		if msg.Type == WSMessageTypePing {
+			c.TouchPing()
+			pong, _ := json.Marshal(WSMessage{Type: WSMessageTypePong})
+			_ = c.Send(pong)
+			continue
+		}
+
+		if msg.Type == WSMessageTypeClientState {
+			var state ClientStateBody
+			if err := json.Unmarshal(msg.Data, &state); err != nil {
+				utils.LogWarn("客户端状态解析失败: %v", err)
+				continue
+			}
+			c.UpdateState(state)
+			continue
+		}
+
+		// 处理 API 响应（使用工作池防止 Goroutine 泛滥）
+		if msg.Type == WSMessageTypeAPIResponse {
+			select {
+			case msgChan <- msg:
+				// Successfully pushed to worker pool
+			default:
+				utils.LogWarn("API Response queue is full, processing synchronously")
+				// Fallback to synchronous processing if queue is full
+				var resp APICallResponse
+				if err := json.Unmarshal(msg.Data, &resp); err != nil {
+					utils.LogError("API 响应解析失败: %v", err)
+					continue
+				}
+				c.hub.handleAPIResponse(resp)
+			}
+		}
+	}
+}
+
+// WritePump 向 WebSocket 连接写入消息
+func (c *Client) WritePump() {
+	defer func() {
+		c.Close()
+	}()
+
+	for {
+		select {
+		case <-c.ctx.Done():
+			return
+		case message, ok := <-c.send:
+			if !ok {
+				return
+			}
+
+			ctx, cancel := context.WithTimeout(c.ctx, 10*time.Second)
+			err := c.Conn.Write(ctx, websocket.MessageText, message)
+			cancel()
+
+			if err != nil {
+				utils.LogError("写入消息失败: %v", err)
+				return
+			}
+		}
+	}
+}
+
+// Send 发送消息到客户端
+func (c *Client) Send(data []byte) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.closed {
+		return errors.New("client is closed")
+	}
+
+	select {
+	case c.send <- data:
+		return nil
+	default:
+		return errors.New("send buffer is full")
+	}
+}
+
+func (c *Client) isClosed() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.closed
+}
+
+// Close 关闭客户端连接
+func (c *Client) Close() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if !c.closed {
+		c.closed = true
+		c.cancel()
+		c.Conn.Close(websocket.StatusNormalClosure, "")
+		close(c.send)
+	}
+}
+
+func (c *Client) pingLoop() {
+	ticker := time.NewTicker(50 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-c.ctx.Done():
+			return
+		case <-ticker.C:
+			ctx, cancel := context.WithTimeout(c.ctx, 10*time.Second)
+			err := c.Conn.Ping(ctx)
+			cancel()
+
+			if err != nil {
+				utils.LogError("Ping 失败: %v", err)
+				c.Close()
+				return
+			}
+			// coder/websocket.Ping waits for the peer's pong. Record the
+			// acknowledgement rather than treating an outbound ping as liveness.
+			c.TouchPong()
+		}
+	}
+}
+
+func (c *Client) Touch() {
+	c.mu.Lock()
+	c.lastSeen = time.Now()
+	c.mu.Unlock()
+}
+
+func (c *Client) TouchPing() {
+	c.mu.Lock()
+	now := time.Now()
+	c.lastPing = now
+	c.lastSeen = now
+	c.mu.Unlock()
+}
+
+// TouchPong records a successful protocol-level heartbeat acknowledgement.
+func (c *Client) TouchPong() {
+	c.mu.Lock()
+	now := time.Now()
+	c.lastPing = now
+	c.lastPong = now
+	c.mu.Unlock()
+}
+
+func (c *Client) UpdateState(state ClientStateBody) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.pagePath = state.PagePath
+	c.href = state.Href
+	c.apiReady = state.APIReady
+	c.apiFunctional = state.APIFunctional
+	if state.APIProbeStatus != "" {
+		c.apiProbeStatus = state.APIProbeStatus
+	}
+	if c.apiProbeStatus == "" {
+		c.apiProbeStatus = "unknown"
+	}
+	c.apiProbeError = state.APIProbeError
+	if state.APIProbeAt > 0 {
+		c.apiProbeAt = time.UnixMilli(state.APIProbeAt)
+	}
+	c.lastSeen = time.Now()
+	if state.Timestamp > 0 {
+		c.lastPing = time.UnixMilli(state.Timestamp)
+	}
+
+	c.methods = make(map[string]bool)
+	for k, v := range state.Methods {
+		c.methods[k] = v
+	}
+
+	utils.LogInfo("WebSocket 客户端状态更新: %s | page=%s | apiReady=%t", c.RemoteAddr, c.pagePath, c.apiReady)
+}
+
+func (c *Client) SupportsKey(key string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if !c.apiReady {
+		return false
+	}
+
+	if len(c.methods) == 0 {
+		return false
+	}
+
+	switch key {
+	case "key:channels:contact_list":
+		return c.methods["finderSearch"]
+	case "key:channels:feed_list":
+		return c.methods["finderUserPage"]
+	case "key:channels:feed_profile":
+		return c.methods["finderGetCommentDetail"]
+	case "key:channels:shared_feed_profile":
+		return c.methods["finderGetCommentDetail"]
+	case "key:channels:shared_feed_resolve":
+		return c.methods["finderGetCommentDetail"]
+	case "key:channels:fetch_feed_comment_list":
+		return c.methods["finderGetCommentList"]
+	default:
+		return true
+	}
+}
+
+func (c *Client) Status() ClientStatus {
+	return c.statusAt(time.Now(), defaultLivenessTimeout)
+}
+
+func (c *Client) statusAt(now time.Time, staleAfter time.Duration) ClientStatus {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	methods := make(map[string]bool, len(c.methods))
+	for k, v := range c.methods {
+		methods[k] = v
+	}
+
+	lastSeenAt := ""
+	if !c.lastSeen.IsZero() {
+		lastSeenAt = c.lastSeen.Format(time.RFC3339)
+	}
+	lastPingAt := ""
+	if !c.lastPing.IsZero() {
+		lastPingAt = c.lastPing.Format(time.RFC3339)
+	}
+	lastPongAt := ""
+	if !c.lastPong.IsZero() {
+		lastPongAt = c.lastPong.Format(time.RFC3339)
+	}
+	lastAPIProbeAt := ""
+	if !c.apiProbeAt.IsZero() {
+		lastAPIProbeAt = c.apiProbeAt.Format(time.RFC3339)
+	}
+
+	applicationFresh := isFreshAt(now, staleAfter, c.lastSeen)
+	protocolFresh := isFreshAt(now, staleAfter, c.lastPong)
+	apiFunctionalFresh := isAPIFunctionallyFreshAt(now, c.apiProbeStatus, c.apiProbeAt)
+
+	return ClientStatus{
+		RemoteAddr:         c.RemoteAddr,
+		PagePath:           c.pagePath,
+		Href:               c.href,
+		APIReady:           c.apiReady,
+		APIFunctional:      c.apiFunctional,
+		APIProbeStatus:     c.apiProbeStatus,
+		APIFunctionalFresh: apiFunctionalFresh,
+		ApplicationFresh:   applicationFresh,
+		ProtocolFresh:      protocolFresh,
+		// API dispatch requires the page JavaScript to be alive and, once a
+		// probe is applicable, the exposed WXU API to have responded.
+		Fresh:           applicationFresh && apiFunctionalFresh,
+		Methods:         methods,
+		ActiveRequests:  int(atomic.LoadInt32(&c.activeRequests)),
+		LastSeenAt:      lastSeenAt,
+		LastPingAt:      lastPingAt,
+		LastPongAt:      lastPongAt,
+		LastAPIProbeAt:  lastAPIProbeAt,
+		APIProbeError:   c.apiProbeError,
+		SupportsSearch:  c.apiReady && methods["finderSearch"],
+		SupportsFeed:    c.apiReady && methods["finderUserPage"],
+		SupportsProfile: c.apiReady && methods["finderGetCommentDetail"],
+		SupportsComment: c.apiReady && methods["finderGetCommentList"],
+	}
+}
+
+func (c *Client) IsFresh(now time.Time, staleAfter time.Duration) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return isFreshAt(now, staleAfter, c.lastSeen) &&
+		isAPIFunctionallyFreshAt(now, c.apiProbeStatus, c.apiProbeAt)
+}
+
+func isAPIFunctionallyFreshAt(now time.Time, status string, observedAt time.Time) bool {
+	switch status {
+	case "failed":
+		return false
+	case "ok":
+		// An older client may report ok without a timestamp. Keep it
+		// compatible until it sends its first timestamped state update.
+		if observedAt.IsZero() {
+			return true
+		}
+		return isFreshAt(now, defaultAPIFunctionalLivenessTimeout, observedAt)
+	case "unknown", "unavailable", "", "deferred":
+		// There is no safe probe target on pages without a loaded feed. The
+		// application heartbeat still protects those pages.
+		return true
+	default:
+		return true
+	}
+}
+
+func isFreshAt(now time.Time, staleAfter time.Duration, timestamps ...time.Time) bool {
+	if staleAfter <= 0 {
+		return true
+	}
+	for _, timestamp := range timestamps {
+		if timestamp.IsZero() || timestamp.After(now) {
+			continue
+		}
+		if now.Sub(timestamp) <= staleAfter {
+			return true
+		}
+	}
+	return false
+}
+
+// GetActiveRequests 获取活跃请求数
+func (c *Client) GetActiveRequests() int {
+	return int(atomic.LoadInt32(&c.activeRequests))
+}
+
+// IncrementActiveRequests 增加活跃请求数
+func (c *Client) IncrementActiveRequests() {
+	atomic.AddInt32(&c.activeRequests, 1)
+}
+
+// DecrementActiveRequests 减少活跃请求数
+func (c *Client) DecrementActiveRequests() {
+	for {
+		old := atomic.LoadInt32(&c.activeRequests)
+		if old <= 0 {
+			return
+		}
+		if atomic.CompareAndSwapInt32(&c.activeRequests, old, old-1) {
+			return
+		}
+	}
+}

@@ -1,0 +1,60 @@
+{
+  "RT_GROUP_ICON": {
+    "APP": {
+      "0000": [
+        "icon.png"
+      ]
+    }
+  },
+  "RT_MANIFEST": {
+    "#1": {
+      "0409": {
+        "identity": {
+          "name": "视频号下载助手",
+          "version": "5.7.9"
+        },
+        "description": "一个简单易用的微信视频号下载工具",
+        "minimum-os": "win7",
+        "execution-level": "as invoker",
+        "ui-access": false,
+        "auto-elevate": false,
+        "dpi-awareness": "system",
+        "disable-theming": false,
+        "disable-window-filtering": false,
+        "high-resolution-scrolling-aware": false,
+        "ultra-high-resolution-scrolling-aware": false,
+        "long-path-aware": false,
+        "printer-driver-isolation": false,
+        "gdi-scaling": false,
+        "segment-heap": false,
+        "use-common-controls-v6": false
+      }
+    }
+  },
+  "RT_VERSION": {
+    "#1": {
+      "0000": {
+        "fixed": {
+          "file_version": "5.7.9",
+          "product_version": "5.7.9"
+        },
+        "info": {
+          "0409": {
+            "Comments": "视频号下载助手",
+            "CompanyName": "nobiyou[github]",
+            "FileDescription": "一个简单易用的微信视频号下载工具",
+            "FileVersion": "5.7.9",
+            "InternalName": "wx_channel",
+            "LegalCopyright": "© 2023-2026",
+            "LegalTrademarks": "",
+            "OriginalFilename": "wx_channel.exe",
+            "PrivateBuild": "",
+            "ProductName": "视频号下载助手",
+            "ProductVersion": "5.7.9",
+            "SpecialBuild": ""
+          }
+        }
+      }
+    }
+  }
+}
