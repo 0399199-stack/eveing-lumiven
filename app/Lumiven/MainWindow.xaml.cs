@@ -369,7 +369,7 @@ public sealed partial class MainWindow : Window
     {
         if (_performanceTest) return;
         var items = MediaGrid.SelectedItems.Cast<MediaItem>().ToList();
-        await RemoveMediaAsync(items, ((MenuFlyoutItem)sender).Tag as string == "files");
+        await RemoveMediaAsync(items, null);
     }
 
     private async void Import_Click(object sender, RoutedEventArgs e) => await GuardAsync(async () =>
@@ -493,29 +493,43 @@ public sealed partial class MainWindow : Window
         menu.ShowAt(button);
     }
 
-    private async Task RemoveMediaAsync(IReadOnlyList<MediaItem> items, bool deleteFile)
+    private async Task RemoveMediaAsync(IReadOnlyList<MediaItem> items, bool? deleteFileChoice)
     {
         if (_deletingMedia || items.Count == 0) return;
         _deletingMedia = true;
         try
         {
+            bool deleteFile = deleteFileChoice == true;
             string summary = items.Count == 1 ? $"{items[0].Title}\n\n{items[0].FilePath}"
                 : $"已选择 {items.Count} 项：\n" + string.Join("\n", items.Take(5).Select(x => x.Title))
                     + (items.Count > 5 ? $"\n……另 {items.Count - 5} 项" : "");
+            var explanation = new TextBlock { TextWrapping = TextWrapping.Wrap, MaxWidth = 440 };
+            var deleteFilesCheckBox = new CheckBox
+            {
+                Content = "同时删除本地文件", IsChecked = false,
+                Visibility = deleteFileChoice is null ? Visibility.Visible : Visibility.Collapsed
+            };
             var dialog = new ContentDialog
             {
                 XamlRoot = Root.XamlRoot,
-                Title = deleteFile ? $"删除 {items.Count} 条记录和本地文件？" : $"仅删除这 {items.Count} 条记录？",
-                PrimaryButtonText = deleteFile ? "删除记录和文件" : "删除记录",
                 CloseButtonText = "取消", DefaultButton = ContentDialogButton.Close,
-                Content = new TextBlock
+                Content = new StackPanel
                 {
-                    Text = summary + "\n\n" + (deleteFile
-                        ? "将永久删除所选视频文件，不经过回收站。文件已不存在时，仅删除记录。未选择的文件不会被删除。"
-                        : "本地视频文件会保留。刷新或重启后，所选记录不会再次显示。"),
-                    TextWrapping = TextWrapping.Wrap, MaxWidth = 440
+                    Spacing = 16,
+                    Children = { new TextBlock { Text = summary, TextWrapping = TextWrapping.Wrap, MaxWidth = 440 }, deleteFilesCheckBox, explanation }
                 }
             };
+            void UpdateConfirmation()
+            {
+                dialog.Title = deleteFile ? $"删除 {items.Count} 条记录和本地文件？" : $"仅删除这 {items.Count} 条记录？";
+                dialog.PrimaryButtonText = deleteFile ? "删除记录和文件" : "删除记录";
+                explanation.Text = deleteFile
+                    ? "将永久删除所选视频文件，不经过回收站。文件已不存在时，仅删除记录。未选择的文件不会被删除。"
+                    : "本地视频文件会保留。刷新或重启后，所选记录不会再次显示。";
+            }
+            deleteFilesCheckBox.Checked += (_, _) => { deleteFile = true; UpdateConfirmation(); };
+            deleteFilesCheckBox.Unchecked += (_, _) => { deleteFile = false; UpdateConfirmation(); };
+            UpdateConfirmation();
             if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
             LibraryPage.IsEnabled = false;
             await _libraryLock.WaitAsync(_lifetime.Token);
