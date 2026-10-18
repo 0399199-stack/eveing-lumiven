@@ -181,6 +181,20 @@ public sealed class LibraryService(string dataDirectory)
         finally { _gate.Release(); }
     }
 
+    public async Task<(IReadOnlyList<MediaItem> Removed, IReadOnlyList<MediaItem> Failed)> RemoveManyAsync(
+        IReadOnlyList<MediaItem> items, bool deleteFiles, CancellationToken cancellationToken = default)
+    {
+        var removed = new List<MediaItem>();
+        var failed = new List<MediaItem>();
+        foreach (var item in items.DistinctBy(x => x.FilePath, StringComparer.OrdinalIgnoreCase))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try { await RemoveAsync(item, deleteFiles, cancellationToken); removed.Add(item); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { failed.Add(item); }
+        }
+        return (removed, failed);
+    }
+
     private static void DeleteRecordedFile(string path)
     {
         // Only this recorded file is removed, never a directory or a redirected path.

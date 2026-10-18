@@ -50,6 +50,7 @@ public sealed class LineIcon : UserControl
         switch (Kind)
         {
             case "More": Circle(5, 12, 1, true); Circle(12, 12, 1, true); Circle(19, 12, 1, true); break;
+            case "Select": Stroke(9, 3, 3, 3, 3, 9); Stroke(15, 3, 21, 3, 21, 9); Stroke(21, 15, 21, 21, 15, 21); Stroke(9, 21, 3, 21, 3, 15); Stroke(7, 12, 10, 15, 17, 8); break;
             case "Library": Stroke(5, 4, 19, 4, 21, 6, 21, 18, 19, 20, 5, 20, 3, 18, 3, 6, 5, 4); Play(9, 8, 8, true); break;
             case "Settings": Line(3, 7, 6, 7); Line(12, 7, 21, 7); Circle(9, 7, 3); Line(3, 17, 12, 17); Line(18, 17, 21, 17); Circle(15, 17, 3); break;
             case "About": Circle(12, 12, 9); Circle(12, 7.5, .6, true); Line(12, 11, 12, 17); break;

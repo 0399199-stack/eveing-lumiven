@@ -4,6 +4,9 @@ public sealed class MediaItem : ObservableObject
 {
     private string _thumbnail = "";
     private bool _isMissing;
+    private bool _isSelected;
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsSelected { get => _isSelected; set => Set(ref _isSelected, value); }
     public string Id { get; set; } = "";
     public string Title { get; set; } = "";
     public string Author { get; set; } = "";

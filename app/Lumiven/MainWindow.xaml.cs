@@ -53,6 +53,7 @@ public sealed partial class MainWindow : Window
     private bool _windowSuspended;
     private bool _searchPending;
     private bool _deletingMedia;
+    private bool _selectingMedia;
 
     public MainWindow()
     {
@@ -320,11 +321,55 @@ public sealed partial class MainWindow : Window
         var results = _media.Where(item => query.Length == 0 || item.Title.Contains(query, StringComparison.OrdinalIgnoreCase) || item.Author.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
         // One ItemsSource reset lets the virtualized panel realize only visible cards.
         // Adding 1,000 entries individually fires 1,000 UI collection notifications.
+        foreach (var item in _media) item.IsSelected = false;
         FilteredMedia = new ObservableCollection<MediaItem>(results);
         MediaGrid.ItemsSource = FilteredMedia;
         LibrarySubtitle.Text = $"{_media.Count} 个视频 · 本地保存，随时回看";
         LibraryEmptyTitle.Text = query.Length > 0 ? "没有找到匹配的视频" : "你的灵感收藏，从这里开始";
         LibraryEmpty.Visibility = results.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        UpdateMediaSelection();
+    }
+
+    private void BatchSelect_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectingMedia) MediaGrid.SelectedItems.Clear();
+        _selectingMedia = !_selectingMedia;
+        MediaGrid.SelectionMode = _selectingMedia ? ListViewSelectionMode.Multiple : ListViewSelectionMode.None;
+        MediaGrid.IsItemClickEnabled = !_selectingMedia;
+        BatchSelectionPanel.Visibility = _selectingMedia ? Visibility.Visible : Visibility.Collapsed;
+        BatchSelectText.Text = _selectingMedia ? "退出选择" : "批量选择";
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName((DependencyObject)sender, BatchSelectText.Text);
+        UpdateMediaSelection();
+    }
+
+    private void Media_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        foreach (var item in e.RemovedItems.OfType<MediaItem>()) item.IsSelected = false;
+        foreach (var item in e.AddedItems.OfType<MediaItem>()) item.IsSelected = true;
+        UpdateMediaSelection();
+    }
+
+    private void UpdateMediaSelection()
+    {
+        if (BatchSelectionCount is null) return;
+        int count = MediaGrid.SelectedItems.Count;
+        BatchSelectionCount.Text = $"已选 {count} / {FilteredMedia.Count} 项";
+        DeleteSelectedButton.IsEnabled = count > 0;
+        SelectAllButton.IsEnabled = FilteredMedia.Count > 0;
+        SelectAllButton.Content = count > 0 && count == FilteredMedia.Count ? "取消全选" : "全选当前结果";
+    }
+
+    private void SelectAllMedia_Click(object sender, RoutedEventArgs e)
+    {
+        if (MediaGrid.SelectedItems.Count == FilteredMedia.Count) MediaGrid.SelectedItems.Clear();
+        else MediaGrid.SelectAll();
+    }
+
+    private async void DeleteSelected_Click(object sender, RoutedEventArgs e)
+    {
+        if (_performanceTest) return;
+        var items = MediaGrid.SelectedItems.Cast<MediaItem>().ToList();
+        await RemoveMediaAsync(items, ((MenuFlyoutItem)sender).Tag as string == "files");
     }
 
     private async void Import_Click(object sender, RoutedEventArgs e) => await GuardAsync(async () =>
@@ -429,7 +474,7 @@ public sealed partial class MainWindow : Window
 
     private async void Media_ItemClick(object sender, ItemClickEventArgs e)
     {
-        if (e.ClickedItem is not MediaItem item) return;
+        if (_selectingMedia || e.ClickedItem is not MediaItem item) return;
         if (_performanceTest) { ShowNotice("性能测试数据", "此场景只测试界面响应，测试卡片不对应真实视频。", InfoBarSeverity.Informational); return; }
         if (item.IsMissing || !File.Exists(item.FilePath)) { ShowNotice("文件已移走", "请检查文件是否仍在原位置，或重新导入目录。", InfoBarSeverity.Warning); return; }
         await GuardAsync(() => OpenPlayerAsync(item));
@@ -441,42 +486,53 @@ public sealed partial class MainWindow : Window
         var menu = new MenuFlyout();
         var remove = new MenuFlyoutItem { Text = "仅删除记录", Icon = new SymbolIcon(Symbol.Remove) };
         var delete = new MenuFlyoutItem { Text = "删除记录并删除本地文件", Icon = new SymbolIcon(Symbol.Delete) };
-        remove.Click += async (_, _) => await RemoveMediaAsync(item, false);
-        delete.Click += async (_, _) => await RemoveMediaAsync(item, true);
+        remove.Click += async (_, _) => await RemoveMediaAsync([item], false);
+        delete.Click += async (_, _) => await RemoveMediaAsync([item], true);
         menu.Items.Add(remove);
         menu.Items.Add(delete);
         menu.ShowAt(button);
     }
 
-    private async Task RemoveMediaAsync(MediaItem item, bool deleteFile)
+    private async Task RemoveMediaAsync(IReadOnlyList<MediaItem> items, bool deleteFile)
     {
-        if (_deletingMedia) return;
+        if (_deletingMedia || items.Count == 0) return;
         _deletingMedia = true;
         try
         {
+            string summary = items.Count == 1 ? $"{items[0].Title}\n\n{items[0].FilePath}"
+                : $"已选择 {items.Count} 项：\n" + string.Join("\n", items.Take(5).Select(x => x.Title))
+                    + (items.Count > 5 ? $"\n……另 {items.Count - 5} 项" : "");
             var dialog = new ContentDialog
             {
                 XamlRoot = Root.XamlRoot,
-                Title = deleteFile ? "删除记录和本地文件？" : "仅删除这条记录？",
+                Title = deleteFile ? $"删除 {items.Count} 条记录和本地文件？" : $"仅删除这 {items.Count} 条记录？",
                 PrimaryButtonText = deleteFile ? "删除记录和文件" : "删除记录",
                 CloseButtonText = "取消", DefaultButton = ContentDialogButton.Close,
                 Content = new TextBlock
                 {
-                    Text = $"{item.Title}\n\n{item.FilePath}\n\n" + (deleteFile
-                        ? "将永久删除此视频文件，不经过回收站。文件已不存在时，仅删除记录。其他文件不会被删除。"
-                        : "本地视频文件会保留。刷新或重启后，这条记录不会再次显示。"),
+                    Text = summary + "\n\n" + (deleteFile
+                        ? "将永久删除所选视频文件，不经过回收站。文件已不存在时，仅删除记录。未选择的文件不会被删除。"
+                        : "本地视频文件会保留。刷新或重启后，所选记录不会再次显示。"),
                     TextWrapping = TextWrapping.Wrap, MaxWidth = 440
                 }
             };
             if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+            LibraryPage.IsEnabled = false;
             await _libraryLock.WaitAsync(_lifetime.Token);
             try
             {
-                if (deleteFile && _playing?.FilePath == item.FilePath) ClosePlayer();
-                await AppServices.Library.RemoveAsync(item, deleteFile, _lifetime.Token);
-                _media.RemoveAll(x => string.Equals(x.FilePath, item.FilePath, StringComparison.OrdinalIgnoreCase));
+                if (deleteFile && items.Any(x => x.FilePath == _playing?.FilePath)) ClosePlayer();
+                var result = await AppServices.Library.RemoveManyAsync(items, deleteFile, _lifetime.Token);
+                var removedPaths = result.Removed.Select(x => x.FilePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                _media.RemoveAll(x => removedPaths.Contains(x.FilePath));
                 FilterLibrary();
-                ShowNotice("记录已删除", deleteFile ? "本地视频文件已删除或已不存在。" : "本地视频文件已保留。", InfoBarSeverity.Success);
+                if (_selectingMedia)
+                    foreach (var failed in result.Failed.Where(FilteredMedia.Contains)) MediaGrid.SelectedItems.Add(failed);
+                ShowNotice(result.Failed.Count > 0 ? (result.Removed.Count == 0 ? "删除未完成" : "部分记录未删除") : "记录已删除",
+                    $"已删除 {result.Removed.Count} 条记录。" + (result.Failed.Count > 0
+                        ? $"{result.Failed.Count} 项未完成，记录已保留；请核对文件占用、权限和磁盘空间后重试。"
+                        : deleteFile ? "所选本地文件已删除或已不存在。" : "本地视频文件已保留。"),
+                    result.Failed.Count > 0 ? InfoBarSeverity.Warning : InfoBarSeverity.Success);
             }
             finally { _libraryLock.Release(); }
         }
@@ -486,7 +542,7 @@ public sealed partial class MainWindow : Window
             AppServices.Log("删除媒体记录", ex);
             ShowNotice("删除未完成", AppServices.UserError(ex) + " 请刷新后核对记录和文件状态。", InfoBarSeverity.Error);
         }
-        finally { _deletingMedia = false; }
+        finally { LibraryPage.IsEnabled = true; _deletingMedia = false; }
     }
 
     private Task OpenPlayerAsync(MediaItem item)

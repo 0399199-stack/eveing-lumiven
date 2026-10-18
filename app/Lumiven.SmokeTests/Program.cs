@@ -122,12 +122,35 @@ await removals.RemoveAsync(directoryItem, false);
 await removals.RemoveAsync(new MediaItem { Id = "unregistered", FilePath = importedFile }, true);
 Check(File.Exists(importedFile), "An unregistered file must not be deleted");
 
+var batchRoot = Path.Combine(root, "batch");
+Directory.CreateDirectory(batchRoot);
+var batchLibrary = new LibraryService(batchRoot);
+for (int i = 0; i < 3; i++) await File.WriteAllBytesAsync(Path.Combine(batchRoot, $"批量{i}.mp4"), [1, 2, 3]);
+var batchItems = (await batchLibrary.ScanAsync(batchRoot)).OrderBy(x => x.FilePath).ToList();
+var onlyRecords = await batchLibrary.RemoveManyAsync([batchItems[0], batchItems[0]], false);
+Check(onlyRecords.Removed.Count == 1 && onlyRecords.Failed.Count == 0 && File.Exists(batchItems[0].FilePath),
+    "Batch record-only deletion must preserve files and deduplicate the selection");
+using (File.Open(batchItems[1].FilePath, FileMode.Open, FileAccess.Read, FileShare.None))
+{
+    var partialBatch = await batchLibrary.RemoveManyAsync([batchItems[1], batchItems[2]], true);
+    Check(partialBatch.Removed.Single() == batchItems[2] && partialBatch.Failed.Single() == batchItems[1],
+        "One locked file must not prevent deletion of other selected files");
+}
+Check(File.Exists(batchItems[0].FilePath) && File.Exists(batchItems[1].FilePath) && !File.Exists(batchItems[2].FilePath),
+    "Batch deletion must affect only selected unlocked files");
+var batchRestart = new LibraryService(batchRoot);
+Check((await batchRestart.ScanAsync(batchRoot)).Single().FilePath == batchItems[1].FilePath,
+    "Partial batch success must survive restart while retaining the failed record");
+await batchRestart.RemoveManyAsync(await batchRestart.GetAllAsync(), true);
+Check((await new LibraryService(batchRoot).GetAllAsync()).Count == 0, "Failed batch entries must be retryable");
+
 Console.WriteLine(JsonSerializer.Serialize(new { passed = true, persistedLibrary = true, importDoesNotMoveFiles = true,
     idempotentImport = true, longChinesePath = true, externalMissing = true, interruptedCache = true,
     falseCompletionPrevented = true, defaultLight = true, safeCertificateError = true, redactedDiagnostics = true,
     recordOnlyDeletion = true, fileDeletion = true, deletionSurvivesRestartAndScan = true, staleEventsIgnored = true,
     newDownloadsVisible = true, deletionFailuresPreserveRecord = true, missingFileDeletion = true,
-    directoriesAndUnregisteredFilesProtected = true, legacyIndexMigration = true, systemChanges = false }));
+    directoriesAndUnregisteredFilesProtected = true, legacyIndexMigration = true,
+    batchRecordDeletion = true, batchPartialFailure = true, batchRetry = true, systemChanges = false }));
 
 static void Check(bool condition, string message)
 {
