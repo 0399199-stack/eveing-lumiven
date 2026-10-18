@@ -59,9 +59,75 @@ Check(userError.Contains("证书") && !userError.Contains("Import-Certificate") 
 var diagnostic = AppServices.RedactDiagnostic("Import-Certificate -FilePath 'C:\\Users\\15168\\secret.cer' https://example.com/watch?key=private secret_token: 0123456789abcdef0123456789abcdef");
 Check(diagnostic.Contains("Import-Certificate") && !diagnostic.Contains("15168") && !diagnostic.Contains("private") && !diagnostic.Contains("0123456789abcdef"),
     "Local diagnostics must retain the failure command but redact paths and credentials");
+
+// Deletion uses synthetic files only and must survive scans and stale engine events.
+var removalRoot = Path.Combine(root, "removal");
+Directory.CreateDirectory(removalRoot);
+var retainedFile = Path.Combine(removalRoot, "保留本地文件.mp4");
+await File.WriteAllBytesAsync(retainedFile, [1, 2, 3]);
+var recordedTask = new DownloadTask { Id = "remove-record", Status = "completed", FilePath = retainedFile,
+    Title = "删除前标题", UpdatedAt = DateTimeOffset.UtcNow.AddMinutes(-1) };
+var oldItem = new MediaItem { Id = recordedTask.Id, FilePath = retainedFile,
+    Title = recordedTask.Title, CompletedAt = recordedTask.UpdatedAt };
+await File.WriteAllTextAsync(Path.Combine(removalRoot, "library.json"),
+    JsonSerializer.Serialize(new[] { oldItem }, AppServices.JsonOptions));
+var removals = new LibraryService(removalRoot);
+Check((await removals.GetAllAsync()).Single().Title == oldItem.Title, "Legacy array indexes must still load");
+await removals.RemoveAsync(oldItem, false);
+Check(File.Exists(retainedFile) && (await removals.GetAllAsync()).Count == 0, "Record-only deletion must keep the video");
+Check(!(await File.ReadAllTextAsync(Path.Combine(removalRoot, "library.json"))).Contains("remove-record"),
+    "Removed item metadata must be discarded");
+removals = new LibraryService(removalRoot);
+Check((await removals.ScanAsync(removalRoot)).Count == 0, "A restart and automatic scan must not restore a deleted record");
+await removals.RecordAsync(recordedTask);
+await removals.RecordManyAsync([recordedTask]);
+Check((await removals.GetAllAsync()).Count == 0, "Stale snapshot and socket events must not restore deleted records");
+recordedTask.Id = "new-download";
+recordedTask.UpdatedAt = DateTimeOffset.UtcNow.AddSeconds(1);
+await removals.RecordAsync(recordedTask);
+var freshItem = (await removals.GetAllAsync()).Single();
+Check(freshItem.Id == "new-download", "A new download to the same path must be visible");
+try { await removals.RemoveAsync(oldItem, true); throw new Exception("Stale card deleted a new download"); }
+catch (IOException) { }
+Check(File.Exists(retainedFile), "A stale UI card must not delete a newer file");
+using (File.Open(retainedFile, FileMode.Open, FileAccess.Read, FileShare.None))
+{
+    try { await removals.RemoveAsync(freshItem, true); throw new Exception("Locked file deletion succeeded"); }
+    catch (IOException) { }
+}
+Check((await removals.GetAllAsync()).Count == 1 && File.Exists(retainedFile), "A file deletion failure must preserve the record");
+using (File.Open(Path.Combine(removalRoot, "library.json"), FileMode.Open, FileAccess.Read, FileShare.Read))
+{
+    try { await removals.RemoveAsync(freshItem, false); throw new Exception("Locked index replacement succeeded"); }
+    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+}
+Check((await removals.GetAllAsync()).Count == 1, "A failed index write must preserve the in-memory record");
+await removals.RemoveAsync(freshItem, true);
+Check(!File.Exists(retainedFile) && (await new LibraryService(removalRoot).GetAllAsync()).Count == 0,
+    "Combined deletion must remove only the selected file and persist the record removal");
+Check(File.Exists(importedFile), "Deleting one video must not remove neighboring files");
+
+var missingTask = new DownloadTask { Id = "missing", Status = "completed", FilePath = Path.Combine(removalRoot, "已移走.mp4"), UpdatedAt = DateTimeOffset.UtcNow };
+await removals.RecordAsync(missingTask);
+await removals.RemoveAsync((await removals.GetAllAsync()).Single(), true);
+Check((await removals.GetAllAsync()).Count == 0, "Missing files must still allow record deletion");
+var directoryPath = Path.Combine(removalRoot, "替换为目录.mp4");
+Directory.CreateDirectory(directoryPath);
+await removals.RecordAsync(new DownloadTask { Id = "directory", Status = "completed", FilePath = directoryPath, UpdatedAt = DateTimeOffset.UtcNow });
+var directoryItem = (await removals.GetAllAsync()).Single();
+try { await removals.RemoveAsync(directoryItem, true); throw new Exception("Directory deletion accepted"); }
+catch (IOException) { }
+Check(Directory.Exists(directoryPath) && (await removals.GetAllAsync()).Count == 1, "Directories must never be deleted");
+await removals.RemoveAsync(directoryItem, false);
+await removals.RemoveAsync(new MediaItem { Id = "unregistered", FilePath = importedFile }, true);
+Check(File.Exists(importedFile), "An unregistered file must not be deleted");
+
 Console.WriteLine(JsonSerializer.Serialize(new { passed = true, persistedLibrary = true, importDoesNotMoveFiles = true,
     idempotentImport = true, longChinesePath = true, externalMissing = true, interruptedCache = true,
-    falseCompletionPrevented = true, defaultLight = true, safeCertificateError = true, redactedDiagnostics = true, systemChanges = false }));
+    falseCompletionPrevented = true, defaultLight = true, safeCertificateError = true, redactedDiagnostics = true,
+    recordOnlyDeletion = true, fileDeletion = true, deletionSurvivesRestartAndScan = true, staleEventsIgnored = true,
+    newDownloadsVisible = true, deletionFailuresPreserveRecord = true, missingFileDeletion = true,
+    directoriesAndUnregisteredFilesProtected = true, legacyIndexMigration = true, systemChanges = false }));
 
 static void Check(bool condition, string message)
 {

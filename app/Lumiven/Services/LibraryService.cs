@@ -13,6 +13,7 @@ public sealed class LibraryService(string dataDirectory)
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly SemaphoreSlim _thumbnails = new(2, 2);
     private readonly Dictionary<string, MediaItem> _items = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, DateTimeOffset> _removed = [];
     private bool _loaded;
     private string IndexPath => Path.Combine(dataDirectory, "library.json");
     private static readonly HashSet<string> VideoExtensions = new(StringComparer.OrdinalIgnoreCase) { ".mp4", ".m4v", ".mov", ".mkv", ".webm", ".avi" };
@@ -25,10 +26,15 @@ public sealed class LibraryService(string dataDirectory)
             try
             {
                 await using var stream = File.OpenRead(IndexPath);
-                var items = await JsonSerializer.DeserializeAsync<List<MediaItem>>(stream, AppServices.JsonOptions);
-                foreach (var item in items ?? []) _items[item.FilePath] = item;
+                using var document = await JsonDocument.ParseAsync(stream);
+                // Older versions stored just the item array.
+                var index = document.RootElement.ValueKind == JsonValueKind.Array
+                    ? new LibraryIndex { Items = document.RootElement.Deserialize<List<MediaItem>>(AppServices.JsonOptions) ?? [] }
+                    : document.RootElement.Deserialize<LibraryIndex>(AppServices.JsonOptions) ?? throw new JsonException("Invalid library index");
+                foreach (var item in index.Items) _items[item.FilePath] = item;
+                foreach (var entry in index.Removed) _removed[entry.Key] = entry.Value;
             }
-            catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException) { AppServices.Log("读取媒体库", ex); }
+            catch (JsonException ex) { throw new IOException("无法读取媒体库，原索引已保留。", ex); }
         }
         _loaded = true;
     }
@@ -58,8 +64,10 @@ public sealed class LibraryService(string dataDirectory)
         try
         {
             await LoadLockedAsync();
+            if (IsRemoved(item.FilePath, task.UpdatedAt)) return;
             if (_items.TryGetValue(item.FilePath, out var previous)) item.Thumbnail = previous.Thumbnail;
             _items[item.FilePath] = item;
+            _removed.Remove(PathKey(item.FilePath));
             await SaveLockedAsync();
         }
         finally { _gate.Release(); }
@@ -75,6 +83,7 @@ public sealed class LibraryService(string dataDirectory)
             {
                 if (task.Status != "completed" || string.IsNullOrWhiteSpace(task.FilePath)) continue;
                 var path = Path.GetFullPath(task.FilePath);
+                if (IsRemoved(path, task.UpdatedAt)) continue;
                 _items.TryGetValue(path, out var previous);
                 _items[path] = new MediaItem
                 {
@@ -82,6 +91,7 @@ public sealed class LibraryService(string dataDirectory)
                     SizeBytes = task.BytesTotal > 0 ? task.BytesTotal : task.BytesReceived, CompletedAt = task.UpdatedAt,
                     Thumbnail = previous?.Thumbnail ?? ""
                 };
+                _removed.Remove(PathKey(path));
             }
             await SaveLockedAsync();
         }
@@ -120,14 +130,75 @@ public sealed class LibraryService(string dataDirectory)
         try
         {
             await LoadLockedAsync();
-            foreach (var item in discovered) if (!_items.ContainsKey(item.FilePath)) _items[item.FilePath] = item;
+            foreach (var item in discovered)
+                if (!_removed.ContainsKey(PathKey(item.FilePath)) && !_items.ContainsKey(item.FilePath)) _items[item.FilePath] = item;
             await SaveLockedAsync();
-            return discovered.Select(x => _items[x.FilePath]).OrderByDescending(x => x.CompletedAt).ToList();
+            return discovered.Where(x => _items.ContainsKey(x.FilePath)).Select(x => _items[x.FilePath]).OrderByDescending(x => x.CompletedAt).ToList();
         }
         finally { _gate.Release(); }
     }
 
-    private Task SaveLockedAsync() => AtomicJson.WriteAsync(IndexPath, _items.Values.ToList(), AppServices.JsonOptions);
+    private sealed class LibraryIndex
+    {
+        public List<MediaItem> Items { get; set; } = [];
+        public Dictionary<string, DateTimeOffset> Removed { get; set; } = [];
+    }
+
+    private static string PathKey(string path) => Convert.ToHexString(SHA256.HashData(
+        Encoding.UTF8.GetBytes(Path.GetFullPath(path).ToUpperInvariant())));
+
+    private bool IsRemoved(string path, DateTimeOffset completedAt) =>
+        _removed.TryGetValue(PathKey(path), out var removedAt) && completedAt <= removedAt;
+
+    private Task SaveLockedAsync() => AtomicJson.WriteAsync(IndexPath,
+        new LibraryIndex { Items = _items.Values.ToList(), Removed = _removed }, AppServices.JsonOptions);
+
+    public async Task RemoveAsync(MediaItem item, bool deleteFile, CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            await LoadLockedAsync();
+            if (!_items.TryGetValue(item.FilePath, out var stored)) return;
+            if (stored.Id != item.Id || stored.CompletedAt != item.CompletedAt)
+                throw new IOException("记录已更新，请刷新后重试。");
+            cancellationToken.ThrowIfCancellationRequested();
+            if (deleteFile) await Task.Run(() => DeleteRecordedFile(stored.FilePath), cancellationToken);
+
+            var key = PathKey(stored.FilePath);
+            var removed = new Dictionary<string, DateTimeOffset>(_removed)
+            {
+                [key] = stored.CompletedAt > DateTimeOffset.UtcNow ? stored.CompletedAt : DateTimeOffset.UtcNow
+            };
+            // Persist before changing the visible collection. A failed file deletion keeps the record.
+            await AtomicJson.WriteAsync(IndexPath, new LibraryIndex
+            {
+                Items = _items.Values.Where(x => !ReferenceEquals(x, stored)).ToList(), Removed = removed
+            }, AppServices.JsonOptions);
+            _items.Remove(stored.FilePath);
+            _removed[key] = removed[key];
+        }
+        finally { _gate.Release(); }
+    }
+
+    private static void DeleteRecordedFile(string path)
+    {
+        // Only this recorded file is removed, never a directory or a redirected path.
+        for (var parent = Directory.GetParent(path); parent is not null; parent = parent.Parent)
+        {
+            if (parent.Exists && (parent.Attributes & System.IO.FileAttributes.ReparsePoint) != 0)
+                throw new IOException("文件路径已重定向，请在资源管理器中核对后删除。");
+        }
+        try
+        {
+            var attributes = File.GetAttributes(path);
+            if ((attributes & (System.IO.FileAttributes.Directory | System.IO.FileAttributes.ReparsePoint)) != 0)
+                throw new IOException("文件路径已改变，不能删除目录或链接。");
+            File.Delete(path);
+        }
+        catch (FileNotFoundException) { }
+        catch (DirectoryNotFoundException) { }
+    }
 
     public async Task RefreshAsync(IEnumerable<MediaItem> items)
     {

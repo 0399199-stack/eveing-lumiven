@@ -22,6 +22,7 @@ namespace Lumiven;
 
 public sealed partial class MainWindow : Window
 {
+    public string DisplayVersion => "v" + System.Reflection.CustomAttributeExtensions.GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(typeof(MainWindow).Assembly)?.InformationalVersion.Split('+')[0] + "  ·  免费开源";
     public ObservableCollection<DownloadTask> Tasks { get; } = [];
     public ObservableCollection<MediaItem> FilteredMedia { get; private set; } = [];
     private readonly List<MediaItem> _media = [];
@@ -51,6 +52,7 @@ public sealed partial class MainWindow : Window
     private string? _pendingTheme;
     private bool _windowSuspended;
     private bool _searchPending;
+    private bool _deletingMedia;
 
     public MainWindow()
     {
@@ -64,11 +66,14 @@ public sealed partial class MainWindow : Window
         _window.MoveAndResize(new RectInt32(workArea.X + (workArea.Width - width) / 2, workArea.Y + (workArea.Height - height) / 2, width, height));
         var icon = Path.Combine(AppContext.BaseDirectory, "Assets", "Lumiven.ico");
         if (File.Exists(icon)) _window.SetIcon(icon);
-        ExtendsContentIntoTitleBar = true;
-        SetTitleBar(TitleBar);
-        _window.TitleBar.PreferredHeightOption = TitleBarHeightOption.Standard;
-        _window.TitleBar.ButtonBackgroundColor = Colors.Transparent;
-        _window.TitleBar.ButtonInactiveBackgroundColor = Colors.Transparent;
+        if (AppWindowTitleBar.IsCustomizationSupported())
+        {
+            ExtendsContentIntoTitleBar = true;
+            SetTitleBar(TitleBar);
+            _window.TitleBar.PreferredHeightOption = TitleBarHeightOption.Standard;
+            _window.TitleBar.ButtonBackgroundColor = Colors.Transparent;
+            _window.TitleBar.ButtonInactiveBackgroundColor = Colors.Transparent;
+        }
         _window.Closing += Window_Closing;
         _window.Changed += (_, _) => DispatcherQueue.TryEnqueue(() =>
         {
@@ -117,12 +122,12 @@ public sealed partial class MainWindow : Window
 
     private void UpdateEffects()
     {
-        bool effects = _uiSettings.AdvancedEffectsEnabled;
+        bool effects = _uiSettings.AdvancedEffectsEnabled && DesktopAcrylicControllerSupported();
         AmbientLayer.Visibility = effects ? Visibility.Visible : Visibility.Collapsed;
         Root.Background = ThemeBrush(effects ? "CanvasBrush" : "CanvasSolidBrush");
         if (_effectsEnabled != effects)
         {
-            SystemBackdrop = effects && DesktopAcrylicControllerSupported() ? new DesktopAcrylicBackdrop() : null;
+            SystemBackdrop = effects ? new DesktopAcrylicBackdrop() : null;
             _effectsEnabled = effects;
         }
         foreach (var border in Descendants<Border>(Root))
@@ -131,8 +136,11 @@ public sealed partial class MainWindow : Window
                 border.Background = ThemeBrush(effects ? "GlassBrush" : "GlassSolidBrush");
         }
         var foreground = Root.ActualTheme == ElementTheme.Dark ? Colors.White : Colors.Black;
-        _window.TitleBar.ButtonForegroundColor = foreground;
-        _window.TitleBar.ButtonInactiveForegroundColor = Root.ActualTheme == ElementTheme.Dark ? Colors.Gray : Colors.DarkGray;
+        if (AppWindowTitleBar.IsCustomizationSupported())
+        {
+            _window.TitleBar.ButtonForegroundColor = foreground;
+            _window.TitleBar.ButtonInactiveForegroundColor = Root.ActualTheme == ElementTheme.Dark ? Colors.Gray : Colors.DarkGray;
+        }
         SelectNavigation();
     }
 
@@ -425,6 +433,60 @@ public sealed partial class MainWindow : Window
         if (_performanceTest) { ShowNotice("性能测试数据", "此场景只测试界面响应，测试卡片不对应真实视频。", InfoBarSeverity.Informational); return; }
         if (item.IsMissing || !File.Exists(item.FilePath)) { ShowNotice("文件已移走", "请检查文件是否仍在原位置，或重新导入目录。", InfoBarSeverity.Warning); return; }
         await GuardAsync(() => OpenPlayerAsync(item));
+    }
+
+    private void MediaMore_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: MediaItem item } button || _performanceTest) return;
+        var menu = new MenuFlyout();
+        var remove = new MenuFlyoutItem { Text = "仅删除记录", Icon = new SymbolIcon(Symbol.Remove) };
+        var delete = new MenuFlyoutItem { Text = "删除记录并删除本地文件", Icon = new SymbolIcon(Symbol.Delete) };
+        remove.Click += async (_, _) => await RemoveMediaAsync(item, false);
+        delete.Click += async (_, _) => await RemoveMediaAsync(item, true);
+        menu.Items.Add(remove);
+        menu.Items.Add(delete);
+        menu.ShowAt(button);
+    }
+
+    private async Task RemoveMediaAsync(MediaItem item, bool deleteFile)
+    {
+        if (_deletingMedia) return;
+        _deletingMedia = true;
+        try
+        {
+            var dialog = new ContentDialog
+            {
+                XamlRoot = Root.XamlRoot,
+                Title = deleteFile ? "删除记录和本地文件？" : "仅删除这条记录？",
+                PrimaryButtonText = deleteFile ? "删除记录和文件" : "删除记录",
+                CloseButtonText = "取消", DefaultButton = ContentDialogButton.Close,
+                Content = new TextBlock
+                {
+                    Text = $"{item.Title}\n\n{item.FilePath}\n\n" + (deleteFile
+                        ? "将永久删除此视频文件，不经过回收站。文件已不存在时，仅删除记录。其他文件不会被删除。"
+                        : "本地视频文件会保留。刷新或重启后，这条记录不会再次显示。"),
+                    TextWrapping = TextWrapping.Wrap, MaxWidth = 440
+                }
+            };
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+            await _libraryLock.WaitAsync(_lifetime.Token);
+            try
+            {
+                if (deleteFile && _playing?.FilePath == item.FilePath) ClosePlayer();
+                await AppServices.Library.RemoveAsync(item, deleteFile, _lifetime.Token);
+                _media.RemoveAll(x => string.Equals(x.FilePath, item.FilePath, StringComparison.OrdinalIgnoreCase));
+                FilterLibrary();
+                ShowNotice("记录已删除", deleteFile ? "本地视频文件已删除或已不存在。" : "本地视频文件已保留。", InfoBarSeverity.Success);
+            }
+            finally { _libraryLock.Release(); }
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        catch (Exception ex)
+        {
+            AppServices.Log("删除媒体记录", ex);
+            ShowNotice("删除未完成", AppServices.UserError(ex) + " 请刷新后核对记录和文件状态。", InfoBarSeverity.Error);
+        }
+        finally { _deletingMedia = false; }
     }
 
     private Task OpenPlayerAsync(MediaItem item)
