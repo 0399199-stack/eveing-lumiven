@@ -1,0 +1,8 @@
+{
+  "scenario": "ready core force-terminated while no downloads active; guardian retained",
+  "proxyExactMatch": true,
+  "rootStoresExactMatch": true,
+  "leaseRemoved": true,
+  "coreProcessCount": 0,
+  "at": "2026-10-19T22:17:08.6190170+08:00"
+}

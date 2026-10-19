@@ -1,0 +1,88 @@
+{
+  "passed": true,
+  "integrity": "ok",
+  "taskCount": 11,
+  "completedCount": 11,
+  "recordCount": 11,
+  "existingFiles": 9,
+  "externallyMissingFiles": 2,
+  "checked": [
+    {
+      "filePresent": true,
+      "taskBytes": 2262454,
+      "downloadedBytes": 2262454,
+      "recordBytes": 2262454,
+      "fileBytes": 2262454
+    },
+    {
+      "filePresent": false,
+      "taskBytes": 6548454,
+      "downloadedBytes": 6548454,
+      "recordBytes": 6548454,
+      "fileBytes": null
+    },
+    {
+      "filePresent": true,
+      "taskBytes": 5417814,
+      "downloadedBytes": 5417814,
+      "recordBytes": 5417814,
+      "fileBytes": 5417814
+    },
+    {
+      "filePresent": false,
+      "taskBytes": 2809571,
+      "downloadedBytes": 2809571,
+      "recordBytes": 2809571,
+      "fileBytes": null
+    },
+    {
+      "filePresent": true,
+      "taskBytes": 6391564,
+      "downloadedBytes": 6391564,
+      "recordBytes": 6391564,
+      "fileBytes": 6391564
+    },
+    {
+      "filePresent": true,
+      "taskBytes": 8399767,
+      "downloadedBytes": 8399767,
+      "recordBytes": 8399767,
+      "fileBytes": 8399767
+    },
+    {
+      "filePresent": true,
+      "taskBytes": 1664649,
+      "downloadedBytes": 1664649,
+      "recordBytes": 1664649,
+      "fileBytes": 1664649
+    },
+    {
+      "filePresent": true,
+      "taskBytes": 2262454,
+      "downloadedBytes": 2262454,
+      "recordBytes": 2262454,
+      "fileBytes": 2262454
+    },
+    {
+      "filePresent": true,
+      "taskBytes": 5005111,
+      "downloadedBytes": 5005111,
+      "recordBytes": 5005111,
+      "fileBytes": 5005111
+    },
+    {
+      "filePresent": true,
+      "taskBytes": 5276378,
+      "downloadedBytes": 5276378,
+      "recordBytes": 5276378,
+      "fileBytes": 5276378
+    },
+    {
+      "filePresent": true,
+      "taskBytes": 5722029,
+      "downloadedBytes": 5722029,
+      "recordBytes": 5722029,
+      "fileBytes": 5722029
+    }
+  ]
+}

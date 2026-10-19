@@ -1004,8 +1004,9 @@ func (h *UploadHandler) HandleSaveVideo(Conn *SunnyNet.HttpConn) bool {
 		h.sendErrorResponse(Conn, err)
 		return true
 	}
-	defer out.Close()
 	defer func() {
+		// Windows cannot remove an open file after a failed write (for example, a full disk).
+		_ = out.Close()
 		if !saveDone {
 			_ = os.Remove(tempSavePath)
 		}

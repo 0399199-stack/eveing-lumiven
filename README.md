@@ -2,7 +2,7 @@
 
 免费的 Windows 微信视频号下载与本地媒体管理软件。界面采用清透玻璃、圆角与轻层次设计；使用 [nobiyou/wx_channel](https://github.com/nobiyou/wx_channel) 的下载与解密内核，新增 WinUI 桌面界面、统一任务记录和下载文件管理。
 
-**状态：首版开发与验收中。** 不将设计图、编译成功或本地夹具测试视为真实微信下载验收。实际完成情况与限制记录于 `docs/VALIDATION.md`，发布前必须完成安装、微信获取、下载、播放和退出恢复检查。
+**V1.1.1：Windows 11 x64 正式版。** 包含 GitHub 自动检查更新、下载校验、媒体库和保存失败清理修复。[下载安装包与源码](https://github.com/0399199-stack/eveing-lumiven/releases/tag/v1.1.1)。实际验收与限制见 [验收记录](docs/VALIDATION.md)。
 
 ![用户批准的媒体库设计参考](docs/design/approved-library.png)
 
@@ -14,9 +14,9 @@
 
 ## 使用方式
 
-V1.1（安装包版本 1.1.0）支持 Windows 10 22H2 x64（19045）及 Windows 11 x64。2026-10-19 用户反馈 Win10 兼容重构版可启动并正常使用；这是用户的基础使用确认，完整专项兼容清单仍见下文记录。安装包包含 .NET 和 Windows App SDK 运行时，无需自行安装 Go 或 .NET。兼容范围及测试清单见 [Windows 10 兼容记录](docs/WINDOWS10.md)。
+V1.1.1 正式支持 Windows 11 x64；保留 Windows 10 22H2 x64（19045）兼容适配，Win10 属于兼容测试范围。2026-10-19 用户反馈 Win10 兼容重构版可启动并正常使用；这是用户的基础使用确认，完整专项兼容清单仍见下文记录。安装包包含 .NET 和 Windows App SDK 运行时，无需自行安装 Go 或 .NET。兼容范围及测试清单见 [Windows 10 兼容记录](docs/WINDOWS10.md)。
 
-1. 安装 `EVEING-Lumiven-Setup-1.1.0-x64.exe`，启动普通权限桌面程序。
+1. 安装 `EVEING-Lumiven-Setup-1.1.1-x64.exe`，启动普通权限桌面程序。
 2. 在首次启用微信下载时，阅读证书、HTTPS 处理及当前用户代理的说明；主动点击启用后，后台内核以当前用户权限运行。
 3. 打开电脑微信的视频号页面，使用注入的下载入口。软件显示任务与保存结果。
 4. 在“已下载”中预览、播放视频或定位文件；卡片右上角“…”可选择“仅删除记录”或“删除记录并删除本地文件”。后者会确认并永久删除当前视频，不经过回收站；文件已移走时也可清理记录。在设置中选择保存文件夹。
@@ -30,7 +30,7 @@ V1.1（安装包版本 1.1.0）支持 Windows 10 22H2 x64（19045）及 Windows 
 
 ## 软件更新
 
-默认启动后从本项目 GitHub Release 检查并自动下载更高版本的正式版，校验完成后由你确认安装。设置和关于页提供检查入口；设置中可关闭自动更新。更新保留视频与设置，有视频任务未完成时暂不安装。1.0.x 用户需要先手动安装一次 1.1.0。无需下载站或 GitHub 账号，详见 [更新说明](docs/UPDATES.md)。
+默认启动后从本项目 GitHub Release 检查并自动下载更高版本的正式版，校验完成后由你确认安装。设置和关于页提供检查入口；设置中可关闭自动更新。更新保留视频与设置，有视频任务未完成时暂不安装。1.0.x 用户需要先手动安装一次 1.1.1。无需下载站或 GitHub 账号，详见 [更新说明](docs/UPDATES.md)。
 
 ## 源码构建
 
@@ -44,7 +44,7 @@ pwsh ./scripts/Build.ps1 -Installer
 pwsh ./scripts/Build.ps1 -Installer -SourceArchive
 ```
 
-输出位于 `artifacts/release`：安装包、对应源码 ZIP、`SHA256SUMS`。构建细节与发布验收见 `docs/BUILD.md`。GitHub Actions 默认对 main 构建与测试；规范版本标签（例如 `v1.1.0`）的公开 Release 在完整验收后由维护者手动运行发布工作流。首版安装包尚未进行代码签名。
+输出位于 `artifacts/release`：安装包、对应源码 ZIP、`SHA256SUMS`。构建细节与发布验收见 `docs/BUILD.md`。GitHub Actions 默认对 main 构建与测试；规范版本标签（例如 `v1.1.1`）的公开 Release 在完整验收后由维护者手动运行发布工作流。首版安装包尚未进行代码签名。
 
 ## 开源与关于
 

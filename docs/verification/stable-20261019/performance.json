@@ -1,0 +1,88 @@
+{
+  "scenario": "Synthetic UI: 1000 media cards, 5 progress tasks, navigation and virtualized scrolling. No network workload.",
+  "recordedAt": "2026-10-19T22:26:36.5330144+08:00",
+  "durationSeconds": 66.7844894,
+  "os": "Microsoft Windows NT 10.0.26200.0",
+  "processors": 24,
+  "renderCallbackIntervals": {
+    "samples": 3804,
+    "medianMs": 16.663000000000466,
+    "p95Ms": 19.589200000002165,
+    "maximumMs": 98.469600000004,
+    "stallsOver100Ms": 0
+  },
+  "dispatcherTimerIntervals": {
+    "samples": 2087,
+    "medianMs": 30.606800000001385,
+    "p95Ms": 35.30050000000483,
+    "maximumMs": 131.63839999999982,
+    "stallsOver100Ms": 1
+  },
+  "uiCallbackDurations": {
+    "FilterLibrary": {
+      "samples": 1,
+      "medianMs": 2.3456,
+      "p95Ms": 2.3456,
+      "maximumMs": 2.3456,
+      "stallsOver100Ms": 0
+    },
+    "Prepare1000Items": {
+      "samples": 1,
+      "medianMs": 10.4315,
+      "p95Ms": 10.4315,
+      "maximumMs": 10.4315,
+      "stallsOver100Ms": 0
+    },
+    "PerformanceTick": {
+      "samples": 240,
+      "medianMs": 0.0053,
+      "p95Ms": 1.3148,
+      "maximumMs": 24.2692,
+      "stallsOver100Ms": 0
+    },
+    "FlushTaskUpdates": {
+      "samples": 235,
+      "medianMs": 2.3407,
+      "p95Ms": 4.9892,
+      "maximumMs": 16.0041,
+      "stallsOver100Ms": 0
+    },
+    "TaskCardRealize": {
+      "samples": 10,
+      "medianMs": 0.0569,
+      "p95Ms": 1.6395,
+      "maximumMs": 1.6395,
+      "stallsOver100Ms": 0
+    },
+    "Navigate": {
+      "samples": 10,
+      "medianMs": 7.4632,
+      "p95Ms": 23.9917,
+      "maximumMs": 23.9917,
+      "stallsOver100Ms": 0
+    },
+    "MediaCardRealize": {
+      "samples": 177,
+      "medianMs": 0.0894,
+      "p95Ms": 0.3696,
+      "maximumMs": 0.6414,
+      "stallsOver100Ms": 0
+    },
+    "CoverFrameSizeChanged": {
+      "samples": 38,
+      "medianMs": 0.0106,
+      "p95Ms": 0.0537,
+      "maximumMs": 0.9339,
+      "stallsOver100Ms": 0
+    },
+    "MediaGridSizeChanged": {
+      "samples": 1,
+      "medianMs": 0.5692,
+      "p95Ms": 0.5692,
+      "maximumMs": 0.5692,
+      "stallsOver100Ms": 0
+    }
+  },
+  "slowUiCallbacks": [],
+  "note": "Callback durations cover only instrumented UI work. Rendering and dispatcher timer intervals include scheduling delay. Minimized time is excluded; nested callback durations overlap. None measure GPU presented frames or input-to-feedback latency."
+}

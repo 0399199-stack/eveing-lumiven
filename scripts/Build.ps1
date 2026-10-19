@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$Version = '1.1.0', [switch]$Installer, [switch]$SourceArchive, [switch]$SkipTests)
+param([string]$Version = '1.1.1', [switch]$Installer, [switch]$SourceArchive, [switch]$SkipTests)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 & (Join-Path $PSScriptRoot 'Verify-Licenses.ps1')
@@ -36,6 +36,8 @@ if (-not $SkipTests) {
         & $node (Join-Path $root 'core/internal/desktop/blackbox.test.mjs') (Join-Path $publish 'lumiven-core.exe') $concurrency
         if ($LASTEXITCODE -ne 0) { throw "Real core handler/Gopeed/SQLite fixture test failed at concurrency $concurrency." }
     }
+    & $node (Join-Path $PSScriptRoot 'tests/storage-permission.mjs') (Join-Path $publish 'lumiven-core.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Windows directory write-permission failure test failed.' }
 }
 $appProject = Join-Path $root 'app/Lumiven/Lumiven.csproj'
 & $dotnet clean $appProject -c Release -r win-x64 -p:Platform=x64

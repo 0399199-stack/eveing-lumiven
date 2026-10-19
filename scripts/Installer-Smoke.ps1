@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$Version = '1.1.0')
+param([string]$Version = '1.1.1')
 $ErrorActionPreference = 'Stop'
 $root = [IO.Path]::GetFullPath((Split-Path $PSScriptRoot -Parent))
 $qa = Join-Path $root 'artifacts/install-qa'

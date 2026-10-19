@@ -1,0 +1,8 @@
+{
+  "scenario": "shell force-terminated; user confirmed Windows certificate removal",
+  "proxyExactMatch": true,
+  "rootStoresExactMatch": true,
+  "leaseRemoved": true,
+  "coreProcessCount": 0,
+  "at": "2026-10-19T22:19:33.9969830+08:00"
+}
