@@ -22,7 +22,7 @@ namespace Lumiven;
 
 public sealed partial class MainWindow : Window
 {
-    public string DisplayVersion => "v" + System.Reflection.CustomAttributeExtensions.GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(typeof(MainWindow).Assembly)?.InformationalVersion.Split('+')[0] + "  ·  免费开源";
+    public string DisplayVersion => "V" + UpdateService.CurrentVersion.ToString(UpdateService.CurrentVersion.Build == 0 ? 2 : 3) + "  ·  免费开源";
     public ObservableCollection<DownloadTask> Tasks { get; } = [];
     public ObservableCollection<MediaItem> FilteredMedia { get; private set; } = [];
     private readonly List<MediaItem> _media = [];
@@ -102,6 +102,7 @@ public sealed partial class MainWindow : Window
         ConcurrencySlider.Value = AppServices.Settings.Concurrency;
         ConcurrencyText.Text = $"{AppServices.Settings.Concurrency} 个";
         ThemeCombo.SelectedIndex = AppServices.Settings.Theme switch { "Light" => 1, "Dark" => 2, _ => 0 };
+        AutomaticUpdatesToggle.IsOn = AppServices.Settings.AutomaticUpdates;
         SelectNavigation();
         UpdateEffects();
         _taskTimer.Start();
@@ -119,6 +120,7 @@ public sealed partial class MainWindow : Window
             await ReloadLibraryAsync();
         });
         Motion.Enter(DownloadsPage);
+        _ = CheckUpdatesAtStartupAsync();
     }
 
     private void UpdateEffects()
@@ -235,8 +237,8 @@ public sealed partial class MainWindow : Window
         bool needsRecovery = AppServices.Engine.StatusState == "recovery_required";
         ConnectionLabel.Text = needsRecovery ? "需要恢复接入" : running ? "微信下载已启用" : "尚未启用";
         ConnectionDot.Fill = ThemeBrush(running ? "AccentBrush" : "MutedBrush");
-        EnableButton.IsEnabled = !_busy && !_stopping && !running && !needsRecovery;
-        StopButton.IsEnabled = !_stopping && (running || needsRecovery || AppServices.Engine.StatusState == "starting");
+        EnableButton.IsEnabled = !_exiting && !_busy && !_stopping && !running && !needsRecovery;
+        StopButton.IsEnabled = !_exiting && !_stopping && (running || needsRecovery || AppServices.Engine.StatusState == "starting");
     }
 
     private void FlushTaskUpdates()
@@ -674,7 +676,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private async Task ExitAsync()
+    private async Task ExitAsync(string? updateInstaller = null)
     {
         if (_exiting) return;
         _exiting = true;
@@ -689,6 +691,25 @@ public sealed partial class MainWindow : Window
                 _exiting = false;
                 AppServices.Log("退出时停止接入", ex);
                 ShowNotice("暂时无法退出", "停止接入或恢复原代理尚未完成。请在设置中重试停止接入，并查看本地日志。", InfoBarSeverity.Error);
+                SetStatus(AppServices.Engine.StatusText);
+                return;
+            }
+        }
+        if (updateInstaller is not null)
+        {
+            try
+            {
+                await _updates.VerifyInstallerAsync(_availableUpdate!, updateInstaller, _lifetime.Token);
+                var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(updateInstaller)
+                    { UseShellExecute = true, Arguments = "/NORESTART" });
+                if (process is null) throw new IOException("无法启动更新安装程序。");
+                process.Dispose();
+            }
+            catch (Exception ex)
+            {
+                _exiting = false;
+                AppServices.Log("启动更新安装", ex);
+                ShowNotice("无法安装更新", "接入已停止。请重新下载更新后再试。", InfoBarSeverity.Error);
                 SetStatus(AppServices.Engine.StatusText);
                 return;
             }

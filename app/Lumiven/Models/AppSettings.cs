@@ -8,5 +8,6 @@ public sealed class AppSettings : ObservableObject
     public string DownloadDirectory { get => _downloadDirectory; set => Set(ref _downloadDirectory, value); }
     public string Theme { get => _theme; set => Set(ref _theme, value); }
     public int Concurrency { get => _concurrency; set => Set(ref _concurrency, Math.Clamp(value, 1, 5)); }
+    public bool AutomaticUpdates { get; set; } = true;
     public List<string> ImportedDirectories { get; set; } = [];
 }

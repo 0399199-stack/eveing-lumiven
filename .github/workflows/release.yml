@@ -3,9 +3,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Existing verified release tag (v1.0.0)
+        description: Existing verified release tag (v1.1.0 or newer)
         required: true
-        default: v1.0.0
+        default: v1.1.0
 permissions:
   contents: read
 jobs:
@@ -13,6 +13,8 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 45
     environment: release
+    env:
+      RELEASE_TAG: ${{ github.event.inputs.version }}
     permissions:
       contents: write
     steps:
@@ -25,22 +27,23 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.event.inputs.version || github.ref_name }}
         run: |
-          if ($env:RELEASE_TAG -ne 'v1.0.0') { throw 'Only the verified 1.0.0 release is configured.' }
+          if ($env:RELEASE_TAG -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') { throw 'Use a stable vMAJOR.MINOR.PATCH tag.' }
           if ((git rev-parse HEAD) -ne (git rev-parse "$($env:RELEASE_TAG)^{commit}")) { throw 'Release source does not match tag.' }
       - name: Install verified fixed toolchains
         shell: pwsh
         run: ./scripts/Prepare-Tools.ps1 -IncludeInstaller
       - name: Build all release files
         shell: pwsh
-        run: ./scripts/Build.ps1 -Installer -SourceArchive -Version 1.0.0
+        run: ./scripts/Build.ps1 -Installer -SourceArchive -Version $env:RELEASE_TAG.Substring(1)
       - name: Require actual completed acceptance record
         shell: pwsh
-        run: ./scripts/Validate-Release.ps1 -Version 1.0.0
+        run: ./scripts/Validate-Release.ps1 -Version $env:RELEASE_TAG.Substring(1)
       - name: Publish matching executable and source
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh release create v1.0.0 artifacts/release/EVEING-Lumiven-Setup-1.0.0-x64.exe artifacts/release/EVEING-Lumiven-Source-1.0.0.zip artifacts/release/SHA256SUMS --verify-tag --title 'EVEING Lumiven 1.0.0' --notes-file docs/RELEASE-NOTES.md
+          $version = $env:RELEASE_TAG.Substring(1)
+          gh release create $env:RELEASE_TAG "artifacts/release/EVEING-Lumiven-Setup-$version-x64.exe" "artifacts/release/EVEING-Lumiven-Source-$version.zip" artifacts/release/SHA256SUMS --verify-tag --title "EVEING Lumiven $version" --notes-file docs/RELEASE-NOTES.md
 

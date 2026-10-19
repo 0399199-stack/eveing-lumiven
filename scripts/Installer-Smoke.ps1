@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$Version = '1.0.0')
+param([string]$Version = '1.1.0')
 $ErrorActionPreference = 'Stop'
 $root = [IO.Path]::GetFullPath((Split-Path $PSScriptRoot -Parent))
 $qa = Join-Path $root 'artifacts/install-qa'
@@ -64,7 +64,8 @@ $installedHash = (Get-FileHash -LiteralPath (Join-Path $target 'EVEING.Lumiven.e
 $sentinel = Join-Path $qa 'preserved-media.txt'
 [IO.File]::WriteAllText($sentinel, 'Installer QA media outside the application directory.')
 $sentinelHash = (Get-FileHash -LiteralPath $sentinel -Algorithm SHA256).Hash
-$upgradeVersion = '1.0.1'
+$baseVersion = [version]$Version
+$upgradeVersion = '{0}.{1}.{2}' -f $baseVersion.Major, $baseVersion.Minor, ($baseVersion.Build + 1)
 & (Join-Path $root '.tools/inno/ISCC.exe') /Qp "/DAppVersion=$upgradeVersion" "/DPublishDir=$(Join-Path $root 'artifacts/publish')" "/DReleaseDir=$qa" (Join-Path $root 'installer/Lumiven.iss')
 if ($LASTEXITCODE -ne 0) { throw 'QA upgrade installer compile failed.' }
 Run-Setup (Join-Path $qa "EVEING-Lumiven-Setup-$upgradeVersion-x64.exe") (Join-Path $qa 'update.log')

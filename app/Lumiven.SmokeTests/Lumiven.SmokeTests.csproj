@@ -12,5 +12,6 @@
     <Compile Include="../Lumiven/Services/EngineClient.cs" Link="Services/EngineClient.cs" />
     <Compile Include="../Lumiven/Services/LibraryService.cs" Link="Services/LibraryService.cs" />
     <Compile Include="../Lumiven/Services/TrayService.cs" Link="Services/TrayService.cs" />
+    <Compile Include="../Lumiven/Services/UpdateService.cs" Link="Services/UpdateService.cs" />
   </ItemGroup>
 </Project>

@@ -2,6 +2,15 @@ using System.Text.Json;
 using Lumiven.Models;
 using Lumiven.Services;
 
+if (args.Contains("--check-updates-live"))
+{
+    using var updates = new UpdateService(Path.GetTempPath());
+    var update = await updates.CheckAsync(new Version(1, 1, 0), CancellationToken.None);
+    Console.WriteLine(JsonSerializer.Serialize(new { githubReachable = true, availableVersion = update?.Version.ToString(), downloaded = false }));
+    return;
+}
+await UpdateTests.RunAsync();
+
 var root = Path.Combine(Path.GetTempPath(), "lumiven-library-test-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(root);
 var video = Path.Combine(root, "原始中文视频.mp4");
