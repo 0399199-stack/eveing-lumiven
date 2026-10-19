@@ -152,6 +152,7 @@
                   <Button x:Name="DownloadUpdateButton" Style="{StaticResource GlassButton}" Click="DownloadUpdate_Click" Content="下载更新" Visibility="Collapsed"/>
                   <Button x:Name="InstallUpdateButton" Style="{StaticResource GlassButton}" Click="InstallUpdate_Click" Content="安装更新" Visibility="Collapsed"/>
                   <Button x:Name="CancelUpdateButton" Style="{StaticResource GlassButton}" Click="CancelUpdate_Click" Content="取消" Visibility="Collapsed"/>
+                  <HyperlinkButton Content="打开 GitHub" NavigateUri="https://github.com/0399199-stack/eveing-lumiven" VerticalAlignment="Center"/>
                 </StackPanel>
                 <HyperlinkButton x:Name="UpdateReleaseLink" Content="查看版本说明" HorizontalAlignment="Left" Padding="0" Visibility="Collapsed"/>
               </StackPanel>
