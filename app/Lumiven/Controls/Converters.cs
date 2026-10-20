@@ -34,7 +34,7 @@ public sealed class FileSizeConverter : IValueConverter
     public object Convert(object value, Type targetType, object parameter, string language)
     {
         var size = System.Convert.ToDouble(value ?? 0);
-        return size switch { >= 1073741824 => $"{size / 1073741824:0.00} GB", >= 1048576 => $"{size / 1048576:0.1} MB", >= 1024 => $"{size / 1024:0.0} KB", _ => $"{size:0} B" };
+        return size switch { >= 1073741824 => $"{size / 1073741824:0.00} GB", >= 1048576 => $"{size / 1048576:0.0} MB", >= 1024 => $"{size / 1024:0.0} KB", _ => $"{size:0} B" };
     }
     public object ConvertBack(object value, Type targetType, object parameter, string language) => throw new NotSupportedException();
 }
