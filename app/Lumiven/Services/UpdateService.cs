@@ -10,6 +10,7 @@ public sealed record AppUpdate(Version Version, string Tag, string FileName, Uri
     long Size, string Sha256)
 {
     public Uri ReleaseUrl => new($"https://github.com/{UpdateService.Repository}/releases/tag/{Tag}");
+    public string ReleaseNotes { get; init; } = "此版本暂未提供更新说明，可打开 GitHub 查看。";
 }
 
 public sealed class UpdateService : IDisposable
@@ -70,7 +71,17 @@ public sealed class UpdateService : IDisposable
         if (installer.TryGetProperty("digest", out var digest) && digest.ValueKind == JsonValueKind.String &&
             !string.Equals(digest.GetString(), "sha256:" + hash, StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("GitHub 校验值与发布文件不一致。");
-        return new AppUpdate(newest, releaseTag, name, url, size, hash);
+        var update = new AppUpdate(newest, releaseTag, name, url, size, hash);
+        if (item.TryGetProperty("body", out var body) && body.ValueKind == JsonValueKind.String &&
+            body.GetString()?.Trim() is { Length: > 0 } notes)
+        {
+            update = update with
+            {
+                ReleaseNotes = notes.Length <= 12_000 ? notes :
+                    notes[..12_000] + "\n\n…完整更新说明请打开 GitHub 查看。"
+            };
+        }
+        return update;
     }
 
     private static JsonElement RequireAsset(JsonElement[] assets, string name)

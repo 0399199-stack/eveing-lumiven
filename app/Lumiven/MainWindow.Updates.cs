@@ -52,6 +52,8 @@ public sealed partial class MainWindow
         UpdateProgress.Value = 0;
         UpdateProgress.IsIndeterminate = true;
         UpdateReleaseLink.Visibility = Visibility.Collapsed;
+        UpdateNotesPanel.Visibility = Visibility.Collapsed;
+        UpdateNotesText.Text = "";
         try
         {
             _availableUpdate = await _updates.CheckAsync(UpdateService.CurrentVersion, _updateCancellation.Token);
@@ -64,6 +66,9 @@ public sealed partial class MainWindow
             {
                 UpdateReleaseLink.NavigateUri = _availableUpdate.ReleaseUrl;
                 UpdateReleaseLink.Visibility = Visibility.Visible;
+                UpdateNotesHeading.Text = $"V{_availableUpdate.Version} 更新内容";
+                UpdateNotesText.Text = _availableUpdate.ReleaseNotes;
+                UpdateNotesPanel.Visibility = Visibility.Visible;
                 UpdateStatusText.Text = $"发现 V{_availableUpdate.Version} · {_availableUpdate.Size / 1024d / 1024d:F1} MB";
                 if (AppServices.Settings.AutomaticUpdates) await DownloadUpdateCoreAsync(_updateCancellation.Token);
                 else ShowNotice("发现新版本", "前往设置 → 软件更新下载并安装。", InfoBarSeverity.Informational);
@@ -144,7 +149,20 @@ public sealed partial class MainWindow
             var dialog = new ContentDialog
             {
                 XamlRoot = Root.XamlRoot, Title = $"安装 V{_availableUpdate.Version}",
-                Content = "Lumiven 将先停止微信接入并恢复代理，然后退出并打开安装向导。下载视频、媒体库和设置会保留。请完成安装后重新打开软件。",
+                Content = new StackPanel
+                {
+                    Spacing = 12,
+                    Children =
+                    {
+                        new TextBlock { Text = "Lumiven 将先停止微信接入并恢复代理，然后退出并打开安装向导。下载视频、媒体库和设置会保留。请完成安装后重新打开软件。", TextWrapping = TextWrapping.Wrap },
+                        new TextBlock { Text = "本次更新", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold },
+                        new ScrollViewer
+                        {
+                            MaxHeight = 220, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                            Content = new TextBlock { Text = _availableUpdate.ReleaseNotes, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true }
+                        }
+                    }
+                },
                 PrimaryButtonText = "继续安装", CloseButtonText = "稍后", DefaultButton = ContentDialogButton.Close
             };
             if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;

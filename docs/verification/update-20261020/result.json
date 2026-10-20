@@ -1,0 +1,19 @@
+{
+  "passed": true,
+  "date": "2026-10-20",
+  "platform": "Windows 11 x64",
+  "fromVersion": "1.1.0",
+  "toVersion": "1.1.1",
+  "startupDiscoveryObserved": true,
+  "automaticDownloadObserved": true,
+  "installerBytes": 75432662,
+  "installerSha256": "13ca77c325496be0fd9bbe109c79855d8ce595cf5b3defd4aeb2123204d214ef",
+  "inAppInstallConfirmationObserved": true,
+  "installWizardCompletedBy": "user; explicitly confirmed in conversation",
+  "restartedVersionObserved": "1.1.1+e6d9a764adade3c07e78b5d55e80c109990b0e4a",
+  "sameVersionNotOffered": true,
+  "protectedFilesUnchanged": 15,
+  "coreMatchesCi": true,
+  "coreSha256": "D92B4441EE59E8421FBEDF9041E56FC9A018B9C9FA41EEAEDC5D4A672C0C2E06",
+  "limitation": "Installation wizard was completed by the user, not observed step by step by automation. No active WeChat connection during this upgrade."
+}

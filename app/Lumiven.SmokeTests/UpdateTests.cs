@@ -15,10 +15,11 @@ internal static class UpdateTests
         const string prefix = "https://github.com/" + UpdateService.Repository + "/releases/download/v1.10.0/";
         var installer = new { name, state = "uploaded", size = bytes.Length, digest = "sha256:" + hash, browser_download_url = prefix + name };
         var sums = new { name = "SHA256SUMS", state = "uploaded", size = 120, browser_download_url = prefix + "SHA256SUMS" };
-        object Release(string tag, bool draft = false, bool prerelease = false, object[]? assets = null) =>
-            new { tag_name = tag, draft, prerelease, assets = assets ?? new object[] { installer, sums } };
+        object Release(string tag, bool draft = false, bool prerelease = false, object[]? assets = null, object? body = null) =>
+            new { tag_name = tag, draft, prerelease, assets = assets ?? new object[] { installer, sums }, body };
+        const string notes = "## 新增功能\n- 抖音视频下载\n- 小红书视频下载\n\n修复：下载失败提示。";
         var releases = JsonSerializer.Serialize(new[] { Release("v9.0.0", prerelease: true), Release("v8.0.0", draft: true),
-            Release("v1.2.0-beta"), Release("v1.9.0"), Release("v1.10.0"), Release("V1.1") });
+            Release("v1.2.0-beta"), Release("v1.9.0"), Release("v1.10.0", body: notes), Release("V1.1") });
         var manifest = hash + "  " + name + "\n";
         int downloads = 0;
         var corrupt = false;
@@ -44,6 +45,7 @@ internal static class UpdateTests
         using var service = new UpdateService(root, handler);
         var update = await service.CheckAsync(new Version(1, 9, 0), CancellationToken.None);
         Check(update?.Version == new Version(1, 10, 0), "Versions must compare numerically and skip drafts/prereleases");
+        Check(update!.ReleaseNotes == notes, "Selected release notes must preserve Chinese text and newlines");
         Check(await service.CheckAsync(new Version(1, 10, 0), CancellationToken.None) is null, "Equal or older versions must not update");
         var path = await service.DownloadAsync(update!, null, CancellationToken.None);
         Check(File.ReadAllBytes(path).SequenceEqual(bytes), "Downloaded installer bytes must match");
@@ -83,6 +85,15 @@ internal static class UpdateTests
         await ExpectAsync<InvalidDataException>(() => service.CheckAsync(new Version(1, 1, 0), CancellationToken.None));
         releases = JsonSerializer.Serialize(new[] { Release("V1.1") });
         Check(await service.CheckAsync(new Version(1, 1, 0), CancellationToken.None) is null, "V1.1 must normalize to 1.1.0");
+        foreach (var body in new object?[] { null, " \r\n ", 123 })
+        {
+            releases = JsonSerializer.Serialize(new[] { Release("v1.10.0", body: body) });
+            Check((await service.CheckAsync(new Version(1, 1, 0), CancellationToken.None))!.ReleaseNotes.Contains("暂未提供"),
+                "Missing or unusable notes must show a clear fallback");
+        }
+        releases = JsonSerializer.Serialize(new[] { Release("v1.10.0", body: new string('字', 12_001)) });
+        var longNotes = (await service.CheckAsync(new Version(1, 1, 0), CancellationToken.None))!.ReleaseNotes;
+        Check(longNotes.Length < 12_100 && longNotes.EndsWith("GitHub 查看。"), "Long notes must remain bounded with a full-notes link hint");
         releases = "[]";
         Check(await service.CheckAsync(new Version(1, 1, 0), CancellationToken.None) is null, "No releases must be a normal result");
         using var limited = new UpdateService(root, new FixtureHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden))));
