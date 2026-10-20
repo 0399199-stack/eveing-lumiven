@@ -203,6 +203,50 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private async void DownloadHelp_Click(object sender, RoutedEventArgs e)
+    {
+        var content = new StackPanel { Spacing = 10, MaxWidth = 460 };
+        void Heading(string text) => content.Children.Add(new TextBlock
+        {
+            Text = text, FontSize = 14, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = ThemeBrush("PrimaryBrush"), Margin = new Thickness(0, 8, 0, 0), TextWrapping = TextWrapping.Wrap
+        });
+        void Paragraph(string text) => content.Children.Add(new TextBlock
+        {
+            Text = text, FontSize = 13, LineHeight = 21, TextWrapping = TextWrapping.Wrap,
+            Foreground = ThemeBrush("MutedBrush"), IsTextSelectionEnabled = true
+        });
+        Heading("首次使用");
+        Heading("1. 启用下载");
+        Paragraph("点击“启用微信下载”，阅读并确认接入说明。若 Windows 弹出证书安装提示，请核对为 EVEING Lumiven 的证书后选择“是”。");
+        Heading("2. 打开视频号");
+        Paragraph("等待软件显示“微信下载已启用”，再打开微信视频号。如果视频号页面已经打开，请关闭该窗口后重新打开。");
+        Heading("3. 选择视频并下载");
+        Paragraph("打开需要保存的视频，点击视频操作区域中的下载按钮，选择所需画质。Lumiven 会显示下载进度。");
+        Heading("4. 查看下载结果");
+        Paragraph("下载完成后，进入“已下载”。点击视频封面即可播放，点击文件夹图标可查看本地文件。");
+        Heading("5. 结束使用");
+        Paragraph("点击“停止接入”，软件会恢复启用前的代理设置并清理临时证书。若 Windows 弹出本软件证书的删除提示，请核对后选择“是”。");
+        Heading("常见问题");
+        Heading("没有看到下载按钮？");
+        Paragraph("确认软件显示“微信下载已启用”，然后关闭视频号窗口并重新打开。");
+        Heading("视频号无法加载？");
+        Paragraph("先点击“停止接入”，等待恢复完成，再重新打开视频号。仍有异常时，可通过关于页的联系方式反馈。");
+        Heading("下载失败了？");
+        Paragraph("查看任务中的失败原因，确认网络连接正常、保存目录可写且磁盘空间充足，再重新下载。");
+        var dialog = new ContentDialog
+        {
+            XamlRoot = Root.XamlRoot, RequestedTheme = Root.ActualTheme,
+            Title = "视频号下载帮助", CloseButtonText = "知道了", DefaultButton = ContentDialogButton.Close,
+            Content = new ScrollViewer
+            {
+                Content = content, MaxHeight = Math.Max(180, Math.Min(480, Root.ActualHeight - 220)),
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+            }
+        };
+        await dialog.ShowAsync();
+    }
+
     private async void Enable_Click(object sender, RoutedEventArgs e)
     {
         if (_performanceTest) return;

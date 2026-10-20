@@ -62,13 +62,12 @@
       <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource GlassPanel}" CornerRadius="22" Padding="32,26,24,24"><Grid>
         <Grid x:Name="DownloadsPage" RowSpacing="22">
           <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-          <StackPanel Spacing="8" Margin="2,4,0,0"><TextBlock Text="视频号下载" Style="{StaticResource PageTitle}"/><TextBlock Text="连接微信，在视频号中点击下载，文件自动收录。" Style="{StaticResource MutedText}"/></StackPanel>
+          <Grid ColumnSpacing="20"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel Spacing="8" Margin="2,4,0,0"><TextBlock Text="视频号下载" Style="{StaticResource PageTitle}"/><TextBlock Text="连接微信，在视频号中点击下载，文件自动收录。" Style="{StaticResource MutedText}" TextWrapping="Wrap"/></StackPanel><Button Grid.Column="1" Style="{StaticResource GlassButton}" VerticalAlignment="Top" Margin="0,8,0,0" Click="DownloadHelp_Click" AutomationProperties.Name="使用帮助"><StackPanel Orientation="Horizontal" Spacing="8"><controls:LineIcon Kind="About" Width="18" Height="18"/><TextBlock Text="使用帮助"/></StackPanel></Button></Grid>
           <Border Grid.Row="1" CornerRadius="26" Background="{ThemeResource PanelShadeBrush}" Margin="2,6,2,-6"/>
           <Border Grid.Row="1" Style="{StaticResource GlassPanel}" Padding="28">
             <Grid ColumnSpacing="22">
-              <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
               <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-              <Border Grid.RowSpan="2" Grid.ColumnSpan="2" BorderBrush="{ThemeResource HighlightBrush}" BorderThickness="1" CornerRadius="19" Margin="-20" IsHitTestVisible="False"/>
+              <Border Grid.ColumnSpan="2" BorderBrush="{ThemeResource HighlightBrush}" BorderThickness="1" CornerRadius="19" Margin="-20" IsHitTestVisible="False"/>
               <StackPanel Spacing="12">
                 <TextBlock Text="YOUR NEXT INSPIRATION" FontSize="10" CharacterSpacing="130" Foreground="{ThemeResource AccentBrush}"/>
                 <TextBlock Text="好内容，值得留下。" FontSize="27" FontWeight="SemiBold" Foreground="{ThemeResource PrimaryBrush}"/>
@@ -86,19 +85,7 @@
                 </Border>
                 <Ellipse Width="9" Height="9" Fill="#EAFAFF" Stroke="#97D9F6" StrokeThickness="1" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,0,0"/>
               </Grid>
-              <Expander Grid.Row="1" Grid.ColumnSpan="2" Margin="0,18,0,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Header="视频号下载指南 · 启用 → 打开 → 保存" FontSize="13">
-                <ScrollViewer MaxHeight="190" VerticalScrollBarVisibility="Auto">
-                  <StackPanel Spacing="10">
-                    <TextBlock Text="1. 启用下载" FontSize="13" FontWeight="SemiBold" Foreground="{ThemeResource PrimaryBrush}"/>
-                    <TextBlock Text="点击“启用微信下载”，阅读并确认接入说明。若 Windows 弹出证书安装提示，请核对为本软件证书后选择“是”。" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap"/>
-                    <TextBlock Text="2. 打开视频号" FontSize="13" FontWeight="SemiBold" Foreground="{ThemeResource PrimaryBrush}"/>
-                    <TextBlock Text="启用成功后，重新打开微信视频号页面，视频操作区域将显示下载按钮。" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap"/>
-                    <TextBlock Text="3. 保存与查看" FontSize="13" FontWeight="SemiBold" Foreground="{ThemeResource PrimaryBrush}"/>
-                    <TextBlock Text="点击视频中的下载按钮，选择所需画质。下载完成后，可在 Lumiven 的“已下载”中播放视频或打开所在文件夹。" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap"/>
-                    <TextBlock Text="未看到下载按钮？请关闭视频号窗口后重新打开，并确认 Lumiven 显示“微信下载已启用”。" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap"/>
-                  </StackPanel>
-                </ScrollViewer>
-              </Expander>
+
             </Grid>
           </Border>
           <Grid Grid.Row="2"><TextBlock x:Name="QueueCount" Text="下载任务 · 0" FontSize="15" FontWeight="SemiBold" Foreground="{ThemeResource PrimaryBrush}"/><Button HorizontalAlignment="Right" Style="{StaticResource GlassButton}" Padding="12,6" Click="Refresh_Click" Content="刷新"/></Grid>
