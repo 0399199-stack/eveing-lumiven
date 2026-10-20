@@ -36,6 +36,7 @@ public sealed class LinkDownloadService(AppSettings settings, LibraryService lib
                     task.Status = "interrupted";
                     task.Error = "上次下载已中断，请重新粘贴分享链接。";
                 }
+                TranslatePendingTitle(task);
                 _tasks[task.Id] = task;
             }
         }
@@ -47,13 +48,13 @@ public sealed class LinkDownloadService(AppSettings settings, LibraryService lib
     public void Start(string text, bool xiaohongshu = false)
     {
         var url = xiaohongshu ? XiaohongshuLink.Extract(text) : DouyinShortLink.Extract(text);
-        var platform = xiaohongshu ? "小红书" : "抖音";
-        var task = new DownloadTask { Id = (xiaohongshu ? "xhs-" : "douyin-") + Guid.NewGuid().ToString("N"), Title = platform + " · 正在解析分享链接",
+        var task = new DownloadTask { Id = (xiaohongshu ? "xhs-" : "douyin-") + Guid.NewGuid().ToString("N"),
+            Title = Localizer.T(xiaohongshu ? "小红书 · 正在解析分享链接" : "抖音 · 正在解析分享链接"),
             Status = "queued", CreatedAt = DateTimeOffset.Now, UpdatedAt = DateTimeOffset.Now };
         lock (_gate)
         {
-            if (_stopping) throw new InvalidOperationException("软件正在退出，请稍后重试。");
-            if (_active.Count >= 5) throw new InvalidDataException("已有 5 个链接任务，请等待下载完成后再添加。");
+            if (_stopping) throw new InvalidOperationException(Localizer.T("软件正在退出，请稍后重试。"));
+            if (_active.Count >= 5) throw new InvalidDataException(Localizer.T("已有 5 个链接任务，请等待下载完成后再添加。"));
             var cancellation = new CancellationTokenSource();
             _tasks[task.Id] = Copy(task);
             _active[task.Id] = (cancellation, Task.Run(() => RunAsync(task, url, cancellation, xiaohongshu)));
@@ -64,6 +65,50 @@ public sealed class LinkDownloadService(AppSettings settings, LibraryService lib
     {
         lock (_gate)
             if (_active.TryGetValue(id, out var operation)) operation.Cancellation.Cancel();
+    }
+
+    public async Task<IReadOnlyList<string>> ClearFinishedTasksAsync()
+    {
+        await _cacheGate.WaitAsync();
+        try
+        {
+            HashSet<string> removed;
+            List<DownloadTask> retained;
+            lock (_gate)
+            {
+                // A terminal event can arrive before its worker finishes saving and cleaning up.
+                removed = _tasks.Values.Where(task => !_active.ContainsKey(task.Id) &&
+                    task.Status is "completed" or "failed" or "cancelled" or "interrupted")
+                    .Select(task => task.Id).ToHashSet(StringComparer.Ordinal);
+                if (removed.Count == 0) return [];
+                retained = _tasks.Values.Where(task => !removed.Contains(task.Id)).ToList();
+            }
+            // Commit the cache first. A failed write leaves the in-memory records intact.
+            await AtomicJson.WriteAsync(CachePath, retained, AppServices.JsonOptions);
+            lock (_gate)
+                foreach (var id in removed) _tasks.Remove(id);
+            return removed.ToArray();
+        }
+        finally { _cacheGate.Release(); }
+    }
+
+    public void RefreshLanguage()
+    {
+        var updated = new List<DownloadTask>();
+        lock (_gate)
+            foreach (var task in _tasks.Values)
+                if (TranslatePendingTitle(task)) updated.Add(Copy(task));
+        foreach (var task in updated) TaskUpdated?.Invoke(this, task);
+    }
+
+    private static bool TranslatePendingTitle(DownloadTask task)
+    {
+        if (!IsLinkTask(task.Id) || !string.IsNullOrEmpty(task.VideoId)) return false;
+        string title = Localizer.T(task.Id.StartsWith("xhs-", StringComparison.Ordinal)
+            ? "小红书 · 正在解析分享链接" : "抖音 · 正在解析分享链接");
+        if (task.Title == title || Localizer.TranslateExisting(task.Title) != title) return false;
+        task.Title = title;
+        return true;
     }
 
     public async Task StopAsync()
@@ -81,6 +126,7 @@ public sealed class LinkDownloadService(AppSettings settings, LibraryService lib
 
     private void Publish(DownloadTask task)
     {
+        TranslatePendingTitle(task);
         task.UpdatedAt = DateTimeOffset.Now;
         task.NormalizeProgress();
         lock (_gate) _tasks[task.Id] = Copy(task);
@@ -176,8 +222,8 @@ public sealed class LinkDownloadService(AppSettings settings, LibraryService lib
         {
             task.Status = "failed";
             task.Error = ex is InvalidDataException ? ex.Message :
-                ex is HttpRequestException ? "视频平台暂未提供可用的视频响应，请稍后重试。" :
-                "文件保存或记录写入失败，请检查保存目录、磁盘空间及权限。";
+                ex is HttpRequestException ? Localizer.T("视频平台暂未提供可用的视频响应，请稍后重试。") :
+                Localizer.T("文件保存或记录写入失败，请检查保存目录、磁盘空间及权限。");
             AppServices.Log("视频链接下载", ex);
         }
         finally
@@ -196,10 +242,10 @@ public sealed class LinkDownloadService(AppSettings settings, LibraryService lib
     {
         await using var file = File.OpenRead(path);
         if (file.Length < 12 || (expectedBytes > 0 && file.Length != expectedBytes))
-            throw new InvalidDataException("视频文件未下载完整，请重试。");
+            throw new InvalidDataException(Localizer.T("视频文件未下载完整，请重试。"));
         byte[] header = new byte[12];
         await file.ReadExactlyAsync(header, token);
         if (!header.AsSpan(4, 4).SequenceEqual("ftyp"u8))
-            throw new InvalidDataException("平台返回的内容不是 MP4 视频，未计为下载成功。");
+            throw new InvalidDataException(Localizer.T("平台返回的内容不是 MP4 视频，未计为下载成功。"));
     }
 }

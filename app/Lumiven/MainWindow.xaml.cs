@@ -22,7 +22,8 @@ namespace Lumiven;
 
 public sealed partial class MainWindow : Window
 {
-    public string DisplayVersion => "V" + UpdateService.CurrentVersion.ToString(UpdateService.CurrentVersion.Build == 0 ? 2 : 3) + "  ·  免费开源";
+    public string ShortVersion => "V" + UpdateService.CurrentVersion.ToString(3);
+    public string DisplayVersion => ShortVersion + "  ·  " + Localizer.T("免费开源");
     public ObservableCollection<DownloadTask> Tasks { get; } = [];
     public ObservableCollection<DownloadTask> LinkTasks { get; } = [];
     public ObservableCollection<MediaItem> FilteredMedia { get; private set; } = [];
@@ -59,6 +60,7 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        InitializeLanguageControls();
         _hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         _window = AppWindow.GetFromWindowId(Win32Interop.GetWindowIdFromWindow(_hwnd));
         double scale = GetDpiForWindow(_hwnd) / 96d;
@@ -102,13 +104,16 @@ public sealed partial class MainWindow : Window
         ApplyTheme(AppServices.Settings.Theme);
         DownloadDirectoryBox.Text = AppServices.Settings.DownloadDirectory;
         ConcurrencySlider.Value = AppServices.Settings.Concurrency;
-        ConcurrencyText.Text = $"{AppServices.Settings.Concurrency} 个";
+        ConcurrencyText.Text = Localizer.T("{0} 个", AppServices.Settings.Concurrency);
+        LanguageCombo.SelectedIndex = Localizer.CurrentLanguage == "en-US" ? 1 : 0;
         ThemeCombo.SelectedIndex = AppServices.Settings.Theme switch { "Light" => 1, "Dark" => 2, _ => 0 };
         AutomaticUpdatesToggle.IsOn = AppServices.Settings.AutomaticUpdates;
+        RefreshLanguage();
         SelectNavigation();
         UpdateEffects();
         _taskTimer.Start();
         if (_performanceTest) { StartPerformanceTest(); return; }
+        StartupContentHost.IsEnabled = false;
         await GuardAsync(async () =>
         {
             await AppServices.Engine.InitializeAsync();
@@ -122,24 +127,21 @@ public sealed partial class MainWindow : Window
             UpdateQueueCount();
             await ReloadLibraryAsync();
         });
+        if (_lifetime.IsCancellationRequested) return;
+        StartupContentHost.IsEnabled = true;
+        _startupReady = true;
         Motion.Enter(DownloadsPage);
-        _ = CheckUpdatesAtStartupAsync();
+        await GuardAsync(ContinueStartupAsync);
     }
 
     private void UpdateEffects()
     {
         bool effects = _uiSettings.AdvancedEffectsEnabled && DesktopAcrylicControllerSupported();
         AmbientLayer.Visibility = effects ? Visibility.Visible : Visibility.Collapsed;
-        Root.Background = ThemeBrush(effects ? "CanvasBrush" : "CanvasSolidBrush");
         if (_effectsEnabled != effects)
         {
             SystemBackdrop = effects ? new DesktopAcrylicBackdrop() : null;
             _effectsEnabled = effects;
-        }
-        foreach (var border in Descendants<Border>(Root))
-        {
-            if (ReferenceEquals(border.Style, Application.Current.Resources["GlassPanel"]))
-                border.Background = ThemeBrush(effects ? "GlassBrush" : "GlassSolidBrush");
         }
         var foreground = Root.ActualTheme == ElementTheme.Dark ? Colors.White : Colors.Black;
         if (AppWindowTitleBar.IsCustomizationSupported())
@@ -149,6 +151,7 @@ public sealed partial class MainWindow : Window
         }
         SelectNavigation();
         UpdatePlatformSelection();
+        ConnectionDot.Fill = ThemeBrush(AppServices.Engine.IsRunning ? "AccentBrush" : "MutedBrush");
     }
 
     private static bool DesktopAcrylicControllerSupported() => Microsoft.UI.Composition.SystemBackdrops.DesktopAcrylicController.IsSupported();
@@ -209,35 +212,35 @@ public sealed partial class MainWindow : Window
         void Heading(string text) => content.Children.Add(new TextBlock
         {
             Text = text, FontSize = 14, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Foreground = ThemeBrush("PrimaryBrush"), Margin = new Thickness(0, 8, 0, 0), TextWrapping = TextWrapping.Wrap
+            Margin = new Thickness(0, 8, 0, 0), TextWrapping = TextWrapping.Wrap
         });
         void Paragraph(string text) => content.Children.Add(new TextBlock
         {
             Text = text, FontSize = 13, LineHeight = 21, TextWrapping = TextWrapping.Wrap,
-            Foreground = ThemeBrush("MutedBrush"), IsTextSelectionEnabled = true
+            IsTextSelectionEnabled = true
         });
-        Heading("首次使用");
-        Heading("1. 启用下载");
-        Paragraph("点击“启用微信下载”，阅读并确认接入说明。若 Windows 弹出证书安装提示，请核对为 EVEING Lumiven 的证书后选择“是”。");
-        Heading("2. 打开视频号");
-        Paragraph("等待软件显示“微信下载已启用”，再打开微信视频号。如果视频号页面已经打开，请关闭该窗口后重新打开。");
-        Heading("3. 选择视频并下载");
-        Paragraph("打开需要保存的视频，点击视频操作区域中的下载按钮，选择所需画质。Lumiven 会显示下载进度。");
-        Heading("4. 查看下载结果");
-        Paragraph("下载完成后，进入“已下载”。点击视频封面即可播放，点击文件夹图标可查看本地文件。");
-        Heading("5. 结束使用");
-        Paragraph("点击“停止接入”，软件会恢复启用前的代理设置并清理临时证书。若 Windows 弹出本软件证书的删除提示，请核对后选择“是”。");
-        Heading("常见问题");
-        Heading("没有看到下载按钮？");
-        Paragraph("确认软件显示“微信下载已启用”，然后关闭视频号窗口并重新打开。");
-        Heading("视频号无法加载？");
-        Paragraph("先点击“停止接入”，等待恢复完成，再重新打开视频号。仍有异常时，可通过关于页的联系方式反馈。");
-        Heading("下载失败了？");
-        Paragraph("查看任务中的失败原因，确认网络连接正常、保存目录可写且磁盘空间充足，再重新下载。");
+        Heading(Localizer.T("首次使用"));
+        Heading(Localizer.T("1. 启用下载"));
+        Paragraph(Localizer.T("点击“启用微信下载”，阅读并确认接入说明。若 Windows 弹出证书安装提示，请核对为 EVEING Lumiven 的证书后选择“是”。"));
+        Heading(Localizer.T("2. 打开视频号"));
+        Paragraph(Localizer.T("等待软件显示“微信下载已启用”，再打开微信视频号。如果视频号页面已经打开，请关闭该窗口后重新打开。"));
+        Heading(Localizer.T("3. 选择视频并下载"));
+        Paragraph(Localizer.T("打开需要保存的视频，点击视频操作区域中的下载按钮，选择所需画质。Lumiven 会显示下载进度。"));
+        Heading(Localizer.T("4. 查看下载结果"));
+        Paragraph(Localizer.T("下载完成后，进入“已下载”。点击视频封面即可播放，点击文件夹图标可查看本地文件。"));
+        Heading(Localizer.T("5. 结束使用"));
+        Paragraph(Localizer.T("点击“停止接入”，软件会恢复启用前的代理设置并清理临时证书。若 Windows 弹出本软件证书的删除提示，请核对后选择“是”。"));
+        Heading(Localizer.T("常见问题"));
+        Heading(Localizer.T("没有看到下载按钮？"));
+        Paragraph(Localizer.T("确认软件显示“微信下载已启用”，然后关闭视频号窗口并重新打开。"));
+        Heading(Localizer.T("视频号无法加载？"));
+        Paragraph(Localizer.T("先点击“停止接入”，等待恢复完成，再重新打开视频号。仍有异常时，可通过关于页的联系方式反馈。"));
+        Heading(Localizer.T("下载失败了？"));
+        Paragraph(Localizer.T("查看任务中的失败原因，确认网络连接正常、保存目录可写且磁盘空间充足，再重新下载。"));
         var dialog = new ContentDialog
         {
-            XamlRoot = Root.XamlRoot, RequestedTheme = Root.ActualTheme,
-            Title = "视频号下载帮助", CloseButtonText = "知道了", DefaultButton = ContentDialogButton.Close,
+            XamlRoot = Root.XamlRoot, RequestedTheme = Root.RequestedTheme, Language = Localizer.CurrentLanguage,
+            Title = Localizer.T("视频号下载帮助"), CloseButtonText = Localizer.T("知道了"), DefaultButton = ContentDialogButton.Close,
             Content = new ScrollViewer
             {
                 Content = content, MaxHeight = Math.Max(180, Math.Min(480, Root.ActualHeight - 220)),
@@ -253,11 +256,11 @@ public sealed partial class MainWindow : Window
         if (_busy) return;
         var consent = new ContentDialog
         {
-            XamlRoot = Root.XamlRoot, Title = "启用微信下载", PrimaryButtonText = "同意并启用", CloseButtonText = "取消",
+            XamlRoot = Root.XamlRoot, RequestedTheme = Root.RequestedTheme, Language = Localizer.CurrentLanguage, Title = Localizer.T("启用微信下载"), PrimaryButtonText = Localizer.T("同意并启用"), CloseButtonText = Localizer.T("取消"),
             DefaultButton = ContentDialogButton.Close,
             Content = new TextBlock
             {
-                Text = "为微信视频号注入下载按钮，需要安装本软件根证书，并临时将当前用户系统代理切换到本机服务。\n\n使用期间，其他遵循系统代理的应用流量也会经过本机。停止接入或退出软件时会恢复原代理；本软件不安装网络驱动。\n\n接入仅作用于当前 Windows 用户，无需管理员权限。如 Windows 提示证书安装确认，请确认后继续。启用后请重新打开视频号页面。",
+                Text = Localizer.T("为微信视频号注入下载按钮，需要安装本软件根证书，并临时将当前用户系统代理切换到本机服务。\n\n使用期间，其他遵循系统代理的应用流量也会经过本机。停止接入或退出软件时会恢复原代理；本软件不安装网络驱动。\n\n接入仅作用于当前 Windows 用户，无需管理员权限。如 Windows 提示证书安装确认，请确认后继续。启用后请重新打开视频号页面。"),
                 TextWrapping = TextWrapping.Wrap, LineHeight = 23, MaxWidth = 430
             }
         };
@@ -275,6 +278,7 @@ public sealed partial class MainWindow : Window
         await GuardAsync(async () => { await AppServices.Engine.StopAsync(); SetStatus(AppServices.Engine.StatusText); });
         _stopping = false;
         SetStatus(AppServices.Engine.StatusText);
+        await GuardAsync(ContinueStartupAsync);
     }
 
     private void SetStatus(string status)
@@ -283,10 +287,49 @@ public sealed partial class MainWindow : Window
         SettingsStatusText.Text = status;
         bool running = AppServices.Engine.IsRunning;
         bool needsRecovery = AppServices.Engine.StatusState == "recovery_required";
-        ConnectionLabel.Text = needsRecovery ? "需要恢复接入" : running ? "微信下载已启用" : "尚未启用";
+        ConnectionLabel.Text = needsRecovery ? Localizer.T("需要恢复接入") : running ? Localizer.T("微信下载已启用") : Localizer.T("尚未启用");
         ConnectionDot.Fill = ThemeBrush(running ? "AccentBrush" : "MutedBrush");
         EnableButton.IsEnabled = !_exiting && !_busy && !_stopping && !running && !needsRecovery;
         StopButton.IsEnabled = !_exiting && !_stopping && (running || needsRecovery || AppServices.Engine.StatusState == "starting");
+        UpdateRepairButton();
+    }
+
+    private void RefreshLanguage()
+    {
+        if (!_initialized) return;
+        Bindings.Update();
+        // ComboBox caches its closed selection label separately from the translated item.
+        _settingLanguage = true;
+        int selectedTheme = ThemeCombo.SelectedIndex;
+        ThemeCombo.SelectedIndex = -1;
+        ThemeCombo.SelectedIndex = selectedTheme;
+        _settingLanguage = false;
+        SetStatus(AppServices.Engine.StatusText);
+        ConcurrencyText.Text = Localizer.T("{0} 个", AppServices.Settings.Concurrency);
+        UpdateQueueCount();
+        LibrarySubtitle.Text = Localizer.T("{0} 个视频 · 本地保存，随时回看", _media.Count);
+        LibraryEmptyTitle.Text = LibrarySearch.Text.Trim().Length > 0
+            ? Localizer.T("没有找到匹配的视频") : Localizer.T("你的灵感收藏，从这里开始");
+        BatchSelectText.Text = _selectingMedia ? Localizer.T("退出选择") : Localizer.T("批量选择");
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(BatchSelectButton, BatchSelectText.Text);
+        // Re-evaluate localized converters without changing tasks, files, the search or selected items.
+        AppServices.Links.RefreshLanguage();
+        TaskList.ItemsSource = null; TaskList.ItemsSource = Tasks;
+        LinkTaskList.ItemsSource = null; LinkTaskList.ItemsSource = LinkTasks;
+        var selected = MediaGrid.SelectedItems.Cast<MediaItem>().ToArray();
+        MediaGrid.ItemsSource = null; MediaGrid.ItemsSource = FilteredMedia;
+        foreach (var item in selected) MediaGrid.SelectedItems.Add(item);
+        UpdateMediaSelection();
+        RefreshLinkLocalization();
+        RefreshUpdateLocalization();
+        RefreshRepairLocalization();
+        if (Notice.IsOpen)
+        {
+            Notice.Title = Localizer.TranslateExisting(Notice.Title);
+            Notice.Message = Localizer.TranslateExisting(Notice.Message);
+        }
+        PlayerError.Text = Localizer.TranslateExisting(PlayerError.Text);
+        AppServices.Tray.RefreshLanguage();
     }
 
     private void FlushTaskUpdates()
@@ -296,6 +339,7 @@ public sealed partial class MainWindow : Window
         bool completed = false;
         foreach (var update in _pendingTasks.Values)
         {
+            if (_clearedLinkTaskIds.Contains(update.Id)) continue;
             var targetTasks = LinkDownloadService.IsLinkTask(update.Id) ? LinkTasks : Tasks;
             var existing = targetTasks.FirstOrDefault(t => t.Id == update.Id);
             if (update.Status == "completed")
@@ -317,7 +361,7 @@ public sealed partial class MainWindow : Window
         UpdateQueueCount();
         if (completed)
         {
-            ShowNotice("下载完成", "视频已保存，可在“已下载”中播放或查看。", InfoBarSeverity.Success);
+            ShowNotice(Localizer.T("下载完成"), Localizer.T("视频已保存，可在“已下载”中播放或查看。"), InfoBarSeverity.Success);
             Motion.Flash(ConnectionDot);
             if (!_performanceTest) _ = GuardAsync(ReloadLibraryAsync);
         }
@@ -325,10 +369,11 @@ public sealed partial class MainWindow : Window
 
     private void UpdateQueueCount()
     {
-        QueueCount.Text = $"下载任务 · {Tasks.Count}";
+        QueueCount.Text = Localizer.T("下载任务 · {0}", Tasks.Count);
         QueueEmpty.Visibility = Tasks.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        LinkQueueCount.Text = $"解析下载任务 · {LinkTasks.Count}";
+        LinkQueueCount.Text = Localizer.T("解析下载任务 · {0}", LinkTasks.Count);
         LinkQueueEmpty.Visibility = LinkTasks.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        UpdateClearLinkRecordsButton();
     }
 
     private async void Refresh_Click(object sender, RoutedEventArgs e) => await GuardAsync(async () =>
@@ -378,8 +423,8 @@ public sealed partial class MainWindow : Window
         foreach (var item in _media) item.IsSelected = false;
         FilteredMedia = new ObservableCollection<MediaItem>(results);
         MediaGrid.ItemsSource = FilteredMedia;
-        LibrarySubtitle.Text = $"{_media.Count} 个视频 · 本地保存，随时回看";
-        LibraryEmptyTitle.Text = query.Length > 0 ? "没有找到匹配的视频" : "你的灵感收藏，从这里开始";
+        LibrarySubtitle.Text = Localizer.T("{0} 个视频 · 本地保存，随时回看", _media.Count);
+        LibraryEmptyTitle.Text = query.Length > 0 ? Localizer.T("没有找到匹配的视频") : Localizer.T("你的灵感收藏，从这里开始");
         LibraryEmpty.Visibility = results.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         UpdateMediaSelection();
     }
@@ -391,7 +436,7 @@ public sealed partial class MainWindow : Window
         MediaGrid.SelectionMode = _selectingMedia ? ListViewSelectionMode.Multiple : ListViewSelectionMode.None;
         MediaGrid.IsItemClickEnabled = !_selectingMedia;
         BatchSelectionPanel.Visibility = _selectingMedia ? Visibility.Visible : Visibility.Collapsed;
-        BatchSelectText.Text = _selectingMedia ? "退出选择" : "批量选择";
+        BatchSelectText.Text = _selectingMedia ? Localizer.T("退出选择") : Localizer.T("批量选择");
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName((DependencyObject)sender, BatchSelectText.Text);
         UpdateMediaSelection();
     }
@@ -407,10 +452,10 @@ public sealed partial class MainWindow : Window
     {
         if (BatchSelectionCount is null) return;
         int count = MediaGrid.SelectedItems.Count;
-        BatchSelectionCount.Text = $"已选 {count} / {FilteredMedia.Count} 项";
+        BatchSelectionCount.Text = Localizer.T("已选 {0} / {1} 项", count, FilteredMedia.Count);
         DeleteSelectedButton.IsEnabled = count > 0;
         SelectAllButton.IsEnabled = FilteredMedia.Count > 0;
-        SelectAllButton.Content = count > 0 && count == FilteredMedia.Count ? "取消全选" : "全选当前结果";
+        SelectAllButton.Content = count > 0 && count == FilteredMedia.Count ? Localizer.T("取消全选") : Localizer.T("全选当前结果");
     }
 
     private void SelectAllMedia_Click(object sender, RoutedEventArgs e)
@@ -434,13 +479,13 @@ public sealed partial class MainWindow : Window
         if (!AppServices.Settings.ImportedDirectories.Contains(folder, StringComparer.OrdinalIgnoreCase)) AppServices.Settings.ImportedDirectories.Add(folder);
         await AppServices.SaveSettingsAsync();
         await ReloadLibraryAsync();
-        ShowNotice("目录已导入", "原文件保留在原目录，Lumiven 只记录位置。", InfoBarSeverity.Success);
+        ShowNotice(Localizer.T("目录已导入"), Localizer.T("原文件保留在原目录，Lumiven 只记录位置。"), InfoBarSeverity.Success);
     });
 
     private async void ChooseDirectory_Click(object sender, RoutedEventArgs e) => await GuardAsync(async () =>
     {
         if (_performanceTest) return;
-        if (AppServices.Engine.IsRunning) { ShowNotice("请先停止接入", "更改保存目录前，请停止微信下载。", InfoBarSeverity.Informational); return; }
+        if (AppServices.Engine.IsRunning) { ShowNotice(Localizer.T("请先停止接入"), Localizer.T("更改保存目录前，请停止微信下载。"), InfoBarSeverity.Informational); return; }
         var folder = await PickFolderAsync();
         if (folder is null) return;
         string old = AppServices.Settings.DownloadDirectory;
@@ -460,7 +505,7 @@ public sealed partial class MainWindow : Window
 
     private void Theme_Changed(object sender, SelectionChangedEventArgs e)
     {
-        if (!_initialized || ThemeCombo.SelectedItem is not ComboBoxItem item) return;
+        if (!_initialized || _settingLanguage || ThemeCombo.SelectedItem is not ComboBoxItem item) return;
         _pendingTheme = (string)item.Tag;
         if (!ThemeCombo.IsDropDownOpen) DispatcherQueue.TryEnqueue(async () => await ApplyPendingThemeAsync());
     }
@@ -475,13 +520,14 @@ public sealed partial class MainWindow : Window
         if (!_performanceTest) await GuardAsync(AppServices.SaveSettingsAsync);
     }
 
-    private void ApplyTheme(string theme) => Root.RequestedTheme = theme switch { "Light" => ElementTheme.Light, "Dark" => ElementTheme.Dark, _ => ElementTheme.Default };
+    private void ApplyTheme(string theme) => Root.RequestedTheme = StartupContentHost.RequestedTheme =
+        theme switch { "Light" => ElementTheme.Light, "Dark" => ElementTheme.Dark, _ => ElementTheme.Default };
 
     private async void Concurrency_Changed(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
     {
         if (!_initialized) return;
         int concurrency = (int)e.NewValue;
-        ConcurrencyText.Text = $"{concurrency} 个";
+        ConcurrencyText.Text = Localizer.T("{0} 个", concurrency);
         AppServices.Settings.Concurrency = concurrency;
         if (!_performanceTest) await GuardAsync(AppServices.SaveSettingsAsync);
     }
@@ -529,8 +575,8 @@ public sealed partial class MainWindow : Window
     private async void Media_ItemClick(object sender, ItemClickEventArgs e)
     {
         if (_selectingMedia || e.ClickedItem is not MediaItem item) return;
-        if (_performanceTest) { ShowNotice("性能测试数据", "此场景只测试界面响应，测试卡片不对应真实视频。", InfoBarSeverity.Informational); return; }
-        if (item.IsMissing || !File.Exists(item.FilePath)) { ShowNotice("文件已移走", "请检查文件是否仍在原位置，或重新导入目录。", InfoBarSeverity.Warning); return; }
+        if (_performanceTest) { ShowNotice(Localizer.T("性能测试数据"), Localizer.T("此场景只测试界面响应，测试卡片不对应真实视频。"), InfoBarSeverity.Informational); return; }
+        if (item.IsMissing || !File.Exists(item.FilePath)) { ShowNotice(Localizer.T("文件已移走"), Localizer.T("请检查文件是否仍在原位置，或重新导入目录。"), InfoBarSeverity.Warning); return; }
         await GuardAsync(() => OpenPlayerAsync(item));
     }
 
@@ -538,8 +584,8 @@ public sealed partial class MainWindow : Window
     {
         if (sender is not Button { Tag: MediaItem item } button || _performanceTest) return;
         var menu = new MenuFlyout();
-        var remove = new MenuFlyoutItem { Text = "仅删除记录", Icon = new SymbolIcon(Symbol.Remove) };
-        var delete = new MenuFlyoutItem { Text = "删除记录并删除本地文件", Icon = new SymbolIcon(Symbol.Delete) };
+        var remove = new MenuFlyoutItem { Text = Localizer.T("仅删除记录"), Icon = new SymbolIcon(Symbol.Remove) };
+        var delete = new MenuFlyoutItem { Text = Localizer.T("删除记录并删除本地文件"), Icon = new SymbolIcon(Symbol.Delete) };
         remove.Click += async (_, _) => await RemoveMediaAsync([item], false);
         delete.Click += async (_, _) => await RemoveMediaAsync([item], true);
         menu.Items.Add(remove);
@@ -555,18 +601,18 @@ public sealed partial class MainWindow : Window
         {
             bool deleteFile = deleteFileChoice == true;
             string summary = items.Count == 1 ? $"{items[0].Title}\n\n{items[0].FilePath}"
-                : $"已选择 {items.Count} 项：\n" + string.Join("\n", items.Take(5).Select(x => x.Title))
-                    + (items.Count > 5 ? $"\n……另 {items.Count - 5} 项" : "");
+                : Localizer.T("已选择 {0} 项：\n", items.Count) + string.Join("\n", items.Take(5).Select(x => x.Title))
+                    + (items.Count > 5 ? Localizer.T("\n……另 {0} 项", items.Count - 5) : "");
             var explanation = new TextBlock { TextWrapping = TextWrapping.Wrap, MaxWidth = 440 };
             var deleteFilesCheckBox = new CheckBox
             {
-                Content = "同时删除本地文件", IsChecked = false,
+                Content = Localizer.T("同时删除本地文件"), IsChecked = false,
                 Visibility = deleteFileChoice is null ? Visibility.Visible : Visibility.Collapsed
             };
             var dialog = new ContentDialog
             {
-                XamlRoot = Root.XamlRoot,
-                CloseButtonText = "取消", DefaultButton = ContentDialogButton.Close,
+                XamlRoot = Root.XamlRoot, RequestedTheme = Root.RequestedTheme, Language = Localizer.CurrentLanguage,
+                CloseButtonText = Localizer.T("取消"), DefaultButton = ContentDialogButton.Close,
                 Content = new StackPanel
                 {
                     Spacing = 16,
@@ -575,11 +621,11 @@ public sealed partial class MainWindow : Window
             };
             void UpdateConfirmation()
             {
-                dialog.Title = deleteFile ? $"删除 {items.Count} 条记录和本地文件？" : $"仅删除这 {items.Count} 条记录？";
-                dialog.PrimaryButtonText = deleteFile ? "删除记录和文件" : "删除记录";
+                dialog.Title = deleteFile ? Localizer.T("删除 {0} 条记录和本地文件？", items.Count) : Localizer.T("仅删除这 {0} 条记录？", items.Count);
+                dialog.PrimaryButtonText = deleteFile ? Localizer.T("删除记录和文件") : Localizer.T("删除记录");
                 explanation.Text = deleteFile
-                    ? "将永久删除所选视频文件，不经过回收站。文件已不存在时，仅删除记录。未选择的文件不会被删除。"
-                    : "本地视频文件会保留。刷新或重启后，所选记录不会再次显示。";
+                    ? Localizer.T("将永久删除所选视频文件，不经过回收站。文件已不存在时，仅删除记录。未选择的文件不会被删除。")
+                    : Localizer.T("本地视频文件会保留。刷新或重启后，所选记录不会再次显示。");
             }
             deleteFilesCheckBox.Checked += (_, _) => { deleteFile = true; UpdateConfirmation(); };
             deleteFilesCheckBox.Unchecked += (_, _) => { deleteFile = false; UpdateConfirmation(); };
@@ -596,10 +642,11 @@ public sealed partial class MainWindow : Window
                 FilterLibrary();
                 if (_selectingMedia)
                     foreach (var failed in result.Failed.Where(FilteredMedia.Contains)) MediaGrid.SelectedItems.Add(failed);
-                ShowNotice(result.Failed.Count > 0 ? (result.Removed.Count == 0 ? "删除未完成" : "部分记录未删除") : "记录已删除",
-                    $"已删除 {result.Removed.Count} 条记录。" + (result.Failed.Count > 0
-                        ? $"{result.Failed.Count} 项未完成，记录已保留；请核对文件占用、权限和磁盘空间后重试。"
-                        : deleteFile ? "所选本地文件已删除或已不存在。" : "本地视频文件已保留。"),
+                ShowNotice(result.Failed.Count > 0 ? (result.Removed.Count == 0 ? Localizer.T("删除未完成") : Localizer.T("部分记录未删除")) : Localizer.T("记录已删除"),
+                    result.Failed.Count > 0
+                        ? Localizer.T("已删除 {0} 条记录。{1} 项未完成，记录已保留；请核对文件占用、权限和磁盘空间后重试。", result.Removed.Count, result.Failed.Count)
+                        : deleteFile ? Localizer.T("已删除 {0} 条记录。所选本地文件已删除或已不存在。", result.Removed.Count)
+                        : Localizer.T("已删除 {0} 条记录。本地视频文件已保留。", result.Removed.Count),
                     result.Failed.Count > 0 ? InfoBarSeverity.Warning : InfoBarSeverity.Success);
             }
             finally { _libraryLock.Release(); }
@@ -608,7 +655,7 @@ public sealed partial class MainWindow : Window
         catch (Exception ex)
         {
             AppServices.Log("删除媒体记录", ex);
-            ShowNotice("删除未完成", AppServices.UserError(ex) + " 请刷新后核对记录和文件状态。", InfoBarSeverity.Error);
+            ShowNotice(Localizer.T("删除未完成"), Localizer.T("{0} 请刷新后核对记录和文件状态。", AppServices.UserError(ex)), InfoBarSeverity.Error);
         }
         finally { LibraryPage.IsEnabled = true; _deletingMedia = false; }
     }
@@ -634,7 +681,7 @@ public sealed partial class MainWindow : Window
         _player?.Dispose();
         _player = new MediaPlayer { AutoPlay = true };
         _player.MediaOpened += (_, _) => DispatcherQueue.TryEnqueue(() => PlayerCover.Visibility = Visibility.Collapsed);
-        _player.MediaFailed += (_, _) => DispatcherQueue.TryEnqueue(() => { PlayerCover.Visibility = Visibility.Collapsed; PlayerError.Text = "Windows 暂不支持此视频的编码。请使用右侧按钮在系统播放器中打开。"; });
+        _player.MediaFailed += (_, _) => DispatcherQueue.TryEnqueue(() => { PlayerCover.Visibility = Visibility.Collapsed; PlayerError.Text = Localizer.T("Windows 暂不支持此视频的编码。请使用右侧按钮在系统播放器中打开。"); });
         VideoPlayer.SetMediaPlayer(_player);
         _player.Source = MediaSource.CreateFromUri(new Uri(item.FilePath));
         return Task.CompletedTask;
@@ -731,20 +778,25 @@ public sealed partial class MainWindow : Window
     private async Task ExitAsync(string? updateInstaller = null)
     {
         if (_exiting) return;
+        if (_repairing)
+        {
+            ShowNotice(Localizer.T("视频号异常修复"), Localizer.T("异常修复尚未结束，请等待完成后再退出。"), InfoBarSeverity.Informational);
+            return;
+        }
         _exiting = true;
         LinkDownloadButton.IsEnabled = false;
         if (!_performanceTest)
         {
             ShowWindow();
             EnableButton.IsEnabled = false; StopButton.IsEnabled = false;
-            EngineStatusText.Text = "正在停止接入并恢复代理…";
+            EngineStatusText.Text = Localizer.T("正在停止接入并恢复代理…");
             try { await AppServices.Engine.StopAsync(); await AppServices.Links.StopAsync(); }
             catch (Exception ex)
             {
                 _exiting = false;
                 LinkDownloadButton.IsEnabled = true;
                 AppServices.Log("退出时停止接入", ex);
-                ShowNotice("暂时无法退出", "停止接入或恢复原代理尚未完成。请在设置中重试停止接入，并查看本地日志。", InfoBarSeverity.Error);
+                ShowNotice(Localizer.T("暂时无法退出"), Localizer.T("停止接入或恢复原代理尚未完成。请在设置中重试停止接入，并查看本地日志。"), InfoBarSeverity.Error);
                 SetStatus(AppServices.Engine.StatusText);
                 return;
             }
@@ -756,7 +808,7 @@ public sealed partial class MainWindow : Window
                 await _updates.VerifyInstallerAsync(_availableUpdate!, updateInstaller, _lifetime.Token);
                 var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(updateInstaller)
                     { UseShellExecute = true, Arguments = "/NORESTART" });
-                if (process is null) throw new IOException("无法启动更新安装程序。");
+                if (process is null) throw new IOException(Localizer.T("无法启动更新安装程序。"));
                 process.Dispose();
             }
             catch (Exception ex)
@@ -764,7 +816,7 @@ public sealed partial class MainWindow : Window
                 _exiting = false;
                 LinkDownloadButton.IsEnabled = true;
                 AppServices.Log("启动更新安装", ex);
-                ShowNotice("无法安装更新", "接入已停止。请重新下载更新后再试。", InfoBarSeverity.Error);
+                ShowNotice(Localizer.T("无法安装更新"), Localizer.T("接入已停止。请重新下载更新后再试。"), InfoBarSeverity.Error);
                 SetStatus(AppServices.Engine.StatusText);
                 return;
             }
@@ -783,9 +835,9 @@ public sealed partial class MainWindow : Window
         {
             AppServices.Log("界面操作", ex);
             var message = AppServices.Engine.StatusState == "recovery_required"
-                ? "接入恢复尚未确认。请点击停止接入并查看本地日志。"
+                ? Localizer.T("接入恢复尚未确认。请点击停止接入并查看本地日志。")
                 : AppServices.UserError(ex);
-            ShowNotice("操作未完成", message, InfoBarSeverity.Error);
+            ShowNotice(Localizer.T("操作未完成"), message, InfoBarSeverity.Error);
         }
     }
 
@@ -797,18 +849,18 @@ public sealed partial class MainWindow : Window
 
     private void StartPerformanceTest()
     {
-        Title = "EVEING Lumiven · 性能测试数据";
+        Title = Localizer.T("EVEING Lumiven · 性能测试数据");
         _window.Title = Title;
         EnableButton.IsEnabled = false;
         StopButton.IsEnabled = false;
-        EngineStatusText.Text = "性能测试数据 · 1000 条历史 + 5 个并行进度任务 · 不下载文件，不修改媒体库";
+        EngineStatusText.Text = Localizer.T("性能测试数据 · 1000 条历史 + 5 个并行进度任务 · 不下载文件，不修改媒体库");
         _performance.Start(DispatcherQueue, "Synthetic UI: 1000 media cards, 5 progress tasks, navigation and virtualized scrolling. No network workload.");
         using (_performance.Measure("Prepare1000Items"))
         {
             for (int i = 0; i < 1000; i++)
                 _media.Add(new MediaItem
                 {
-                    Id = $"performance-media-{i}", Title = $"性能测试数据 · 灵感片段 {i + 1:0000}", Author = $"测试作者 {i % 32 + 1}",
+                    Id = $"performance-media-{i}", Title = Localizer.T("性能测试数据 · 灵感片段 {0:0000}", i + 1), Author = Localizer.T("测试作者 {0}", i % 32 + 1),
                     Quality = "1080p", FilePath = Path.Combine(Path.GetTempPath(), $"lumiven-performance-{i}.mp4"),
                     SizeBytes = 1024 * 1024 * (20L + i % 80), CompletedAt = DateTimeOffset.Now.AddMinutes(-i)
                 });
@@ -816,7 +868,7 @@ public sealed partial class MainWindow : Window
         }
         _performanceTimer.Tick += PerformanceTick;
         _performanceTimer.Start();
-        ShowNotice("性能测试数据", "60 秒界面压力测试正在运行，结果会保存到本地 performance 目录。", InfoBarSeverity.Informational);
+        ShowNotice(Localizer.T("性能测试数据"), Localizer.T("60 秒界面压力测试正在运行，结果会保存到本地 performance 目录。"), InfoBarSeverity.Informational);
     }
 
     private async void PerformanceTick(object? sender, object e)
@@ -827,7 +879,7 @@ public sealed partial class MainWindow : Window
             for (int i = 0; i < 5; i++)
                 _pendingTasks[$"performance-task-{i}"] = new DownloadTask
                 {
-                    Id = $"performance-task-{i}", Title = $"性能测试数据 · 并行下载 {i + 1}", Author = "测试作者", Quality = "1080p",
+                    Id = $"performance-task-{i}", Title = Localizer.T("性能测试数据 · 并行下载 {0}", i + 1), Author = Localizer.T("测试作者"), Quality = "1080p",
                     Status = _performanceStep >= 220 ? "completed" : "downloading", Progress = Math.Min(100, _performanceStep * 100d / 220),
                     BytesTotal = 104857600, BytesReceived = (long)Math.Min(104857600, _performanceStep * 104857600d / 220), UpdatedAt = DateTimeOffset.Now
                 };
@@ -848,7 +900,7 @@ public sealed partial class MainWindow : Window
         await GuardAsync(async () =>
         {
             var path = await _performance.StopAsync();
-            ShowNotice("性能测试完成", $"测试记录：{path}", InfoBarSeverity.Success);
+            ShowNotice(Localizer.T("性能测试完成"), Localizer.T("测试记录：{0}", path), InfoBarSeverity.Success);
         });
     }
 

@@ -23,6 +23,8 @@ public partial class App : Application
             }
         }
         catch (AbandonedMutexException) { }
+        Localizer.SetLanguage(AppServices.Settings.Language);
+        Microsoft.Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride = Localizer.CurrentLanguage;
         InitializeComponent();
         UnhandledException += (_, args) => AppServices.Log("未处理异常", args.Exception);
     }

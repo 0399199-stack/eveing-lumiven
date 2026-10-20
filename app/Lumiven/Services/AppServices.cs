@@ -52,18 +52,19 @@ public static class AppServices
     {
         var detail = exception.ToString();
         if (detail.Contains("Import-Certificate", StringComparison.OrdinalIgnoreCase))
-            return "本机根证书安装失败。Windows 可能需要安全确认；如弹出系统提示，请确认后重试。未出现提示时请查看本地日志。";
+            return Localizer.T("本机根证书安装失败。Windows 可能需要安全确认；如弹出系统提示，请确认后重试。未出现提示时请查看本地日志。");
         if (detail.Contains("Windows 设置失败", StringComparison.OrdinalIgnoreCase))
-            return "Windows 网络设置失败，微信下载未启用。请查看本地日志后重试。";
-        if (detail.Contains("找不到可用的本地端口", StringComparison.Ordinal))
-            return "本地端口被占用，请关闭旧下载器后重试。";
+            return Localizer.T("Windows 网络设置失败，微信下载未启用。请查看本地日志后重试。");
+        if (detail.Contains("找不到可用的本地端口", StringComparison.Ordinal) ||
+            detail.Contains(Localizer.T("找不到可用的本地端口，请关闭旧下载器后重试。"), StringComparison.Ordinal))
+            return Localizer.T("本地端口被占用，请关闭旧下载器后重试。");
         return exception switch
         {
-            FileNotFoundException => "所需文件不存在，请检查软件安装或视频文件位置。",
-            DirectoryNotFoundException => "文件夹不存在或已移动，请重新选择。",
-            UnauthorizedAccessException => "访问被拒绝，请检查文件夹权限后重试。",
-            IOException => "文件访问失败，请检查磁盘空间与文件占用情况。",
-            _ => "操作失败，请查看本地日志后重试。"
+            FileNotFoundException => Localizer.T("所需文件不存在，请检查软件安装或视频文件位置。"),
+            DirectoryNotFoundException => Localizer.T("文件夹不存在或已移动，请重新选择。"),
+            UnauthorizedAccessException => Localizer.T("访问被拒绝，请检查文件夹权限后重试。"),
+            IOException => Localizer.T("文件访问失败，请检查磁盘空间与文件占用情况。"),
+            _ => Localizer.T("操作失败，请查看本地日志后重试。")
         };
     }
 

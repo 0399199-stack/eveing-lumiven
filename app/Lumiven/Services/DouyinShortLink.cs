@@ -17,7 +17,7 @@ public static class DouyinShortLink
     {
         var match = Regex.Match(text, @"(?<![A-Za-z0-9_./@-])https://v\.douyin\.com/[A-Za-z0-9]+/?(?=$|[\s，。！；：、）】!?])",
             RegexOptions.IgnoreCase, TimeSpan.FromSeconds(1));
-        if (!match.Success) throw new InvalidDataException("请粘贴抖音 App 的视频分享短链接（https://v.douyin.com/…），或包含它的整段文案。");
+        if (!match.Success) throw new InvalidDataException(Localizer.T("请粘贴抖音 App 的视频分享短链接（https://v.douyin.com/…），或包含它的整段文案。"));
         return new Uri(match.Value);
     }
 
@@ -26,7 +26,7 @@ public static class DouyinShortLink
         using var share = await VideoLinkHttp.GetAsync(http, shortLink, false, token);
         var path = share.RequestMessage?.RequestUri?.AbsolutePath ?? "";
         var match = Regex.Match(path, @"^/(?:share/)?video/(\d{10,24})/?$", RegexOptions.None, TimeSpan.FromSeconds(1));
-        if (!match.Success) throw new InvalidDataException("未找到视频作品。首版暂不支持图集、直播或用户主页。");
+        if (!match.Success) throw new InvalidDataException(Localizer.T("未找到视频作品。首版暂不支持图集、直播或用户主页。"));
         var id = match.Groups[1].Value;
         var html = await VideoLinkHttp.ReadPageAsync(share, token);
         var video = ParsePage(html, id);
@@ -39,7 +39,7 @@ public static class DouyinShortLink
             video = ParsePage(await VideoLinkHttp.ReadPageAsync(page, token), id);
             if (video is not null) return video;
         }
-        throw new InvalidDataException(NoVideo);
+        throw new InvalidDataException(Localizer.T(NoVideo));
     }
 
     internal static LinkVideo? ParsePage(string html, string expectedId)
@@ -71,7 +71,7 @@ public static class DouyinShortLink
                     var quality = video.TryGetProperty("width", out var w) && w.ValueKind == JsonValueKind.Number && w.TryGetInt32(out var width) &&
                         video.TryGetProperty("height", out var h) && h.ValueKind == JsonValueKind.Number && h.TryGetInt32(out var height)
                         ? $"{width}×{height}" : "抖音视频";
-                    return new(expectedId, string.IsNullOrWhiteSpace(title) ? "抖音视频" : title, author, quality, uri);
+                    return new(expectedId, string.IsNullOrWhiteSpace(title) ? Localizer.T("抖音视频") : title, author, quality, uri);
                 }
             }
         }

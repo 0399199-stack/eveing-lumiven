@@ -35,13 +35,20 @@ public sealed class TrayService : IDisposable
     {
         Size = (uint)Marshal.SizeOf<NotifyIconData>(), Window = _window, Id = 1,
         Flags = 1 | 2 | 4, Callback = CallbackMessage, Icon = _icon,
-        Tip = "EVEING Lumiven · 双击打开", Info = "", InfoTitle = ""
+        Tip = Localizer.T("EVEING Lumiven · 双击打开"), Info = "", InfoTitle = ""
     };
 
     private void AddIcon()
     {
         var data = IconData();
-        if (!ShellNotifyIcon(0, ref data)) throw new System.ComponentModel.Win32Exception("无法创建系统托盘图标");
+        if (!ShellNotifyIcon(0, ref data)) throw new System.ComponentModel.Win32Exception(Localizer.T("无法创建系统托盘图标"));
+    }
+
+    public void RefreshLanguage()
+    {
+        if (!_installed) return;
+        var data = IconData();
+        ShellNotifyIcon(1, ref data);
     }
 
     private IntPtr WindowMessage(IntPtr hwnd, uint message, UIntPtr wParam, IntPtr lParam, UIntPtr id, UIntPtr data)
@@ -63,9 +70,9 @@ public sealed class TrayService : IDisposable
         if (menu == IntPtr.Zero) return;
         try
         {
-            AppendMenu(menu, 0, new UIntPtr(1), "打开 EVEING Lumiven");
+            AppendMenu(menu, 0, new UIntPtr(1), Localizer.T("打开 EVEING Lumiven"));
             AppendMenu(menu, 0x800, UIntPtr.Zero, null);
-            AppendMenu(menu, 0, new UIntPtr(2), "退出并停止下载");
+            AppendMenu(menu, 0, new UIntPtr(2), Localizer.T("退出并停止下载"));
             GetCursorPos(out var point);
             SetForegroundWindow(_window);
             var selected = TrackPopupMenu(menu, 0x100 | 0x2, point.X, point.Y, 0, _window, IntPtr.Zero);

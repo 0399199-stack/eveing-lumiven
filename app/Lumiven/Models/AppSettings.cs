@@ -4,10 +4,13 @@ public sealed class AppSettings : ObservableObject
 {
     private string _downloadDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos), "EVEING Lumiven");
     private string _theme = "Light";
+    private string _language = "zh-CN";
     private int _concurrency = 2;
     public string DownloadDirectory { get => _downloadDirectory; set => Set(ref _downloadDirectory, value); }
     public string Theme { get => _theme; set => Set(ref _theme, value); }
+    public string Language { get => _language; set => Set(ref _language, value == "en-US" ? "en-US" : "zh-CN"); }
     public int Concurrency { get => _concurrency; set => Set(ref _concurrency, Math.Clamp(value, 1, 5)); }
     public bool AutomaticUpdates { get; set; } = true;
+    public bool SuppressStartupNotice { get; set; }
     public List<string> ImportedDirectories { get; set; } = [];
 }

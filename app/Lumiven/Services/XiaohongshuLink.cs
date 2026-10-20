@@ -12,9 +12,9 @@ public static class XiaohongshuLink
     public static Uri Extract(string text)
     {
         var match = Regex.Match(text, @"(?<![\w./@-])https://(?:xhslink\.(?:cn|com)|(?:www\.)?xiaohongshu\.com)/[^\s<>""'，。！；：、）】]+", RegexOptions.IgnoreCase, TimeSpan.FromSeconds(1));
-        if (!match.Success) throw new InvalidDataException("请粘贴小红书视频笔记的完整分享链接，或包含链接的整段文案。");
+        if (!match.Success) throw new InvalidDataException(Localizer.T("请粘贴小红书视频笔记的完整分享链接，或包含链接的整段文案。"));
         var uri = new Uri(match.Value.TrimEnd(')', '.', ',', ';', '!'));
-        if (!VideoLinkHttp.Allowed(uri, false, true)) throw new InvalidDataException("不支持这个小红书链接。");
+        if (!VideoLinkHttp.Allowed(uri, false, true)) throw new InvalidDataException(Localizer.T("不支持这个小红书链接。"));
         return uri;
     }
 
@@ -23,9 +23,9 @@ public static class XiaohongshuLink
         using var page = await VideoLinkHttp.GetAsync(http, link, false, token, true);
         var path = page.RequestMessage?.RequestUri?.AbsolutePath ?? "";
         var match = Regex.Match(path, @"^/(?:explore|discovery/item)/([0-9a-f]{24})/?$", RegexOptions.IgnoreCase, TimeSpan.FromSeconds(1));
-        if (!match.Success) throw new InvalidDataException("未找到小红书视频笔记，请复制 App 中的完整分享链接。");
+        if (!match.Success) throw new InvalidDataException(Localizer.T("未找到小红书视频笔记，请复制 App 中的完整分享链接。"));
         return ParsePage(await VideoLinkHttp.ReadPageAsync(page, token), match.Groups[1].Value)
-            ?? throw new InvalidDataException("小红书暂未返回可下载的视频。请确认是视频笔记，并重新复制完整分享链接后重试。");
+            ?? throw new InvalidDataException(Localizer.T("小红书暂未返回可下载的视频。请确认是视频笔记，并重新复制完整分享链接后重试。"));
     }
 
     internal static LinkVideo? ParsePage(string html, string expectedId)
@@ -67,7 +67,7 @@ public static class XiaohongshuLink
                 var title = Str(note, "title");
                 var author = Str(note, "user", "nickname");
                 if (author.Length == 0) author = Str(note, "user", "nickName");
-                return new(expectedId, title.Length == 0 ? "小红书视频" : title, author, quality, url);
+                return new(expectedId, title.Length == 0 ? Localizer.T("小红书视频") : title, author, quality, url);
             }
         }
         catch (JsonException) { }

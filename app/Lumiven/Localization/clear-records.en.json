@@ -1,0 +1,12 @@
+{
+  "清除记录": "Clear records",
+  "仅清除已结束的解析任务记录": "Clear finished video-link task records only",
+  "清除已结束的解析记录？": "Clear finished task records?",
+  "仅移除视频解析中的已完成、失败、已取消和中断的任务记录。下载的视频文件和“已下载”媒体库会保留，正在进行的解析与下载不受影响。": "Only completed, failed, cancelled and interrupted tasks will be removed from Video links. Downloaded video files and your Downloads library will be kept. Active parsing and downloads will continue.",
+  "暂无可清除的记录": "No records to clear",
+  "当前没有可清除的已结束任务。若任务刚刚结束，请稍后重试。": "There are no finished task records ready to clear. If a task has just ended, try again shortly.",
+  "解析记录已清除": "Task records cleared",
+  "已清除 {0} 条记录。下载的视频文件和媒体库已保留。": "Cleared {0} records. Downloaded video files and your library have been kept.",
+  "未能清除记录": "Could not clear records",
+  "记录未作更改，请稍后重试。 {0}": "Your records have not been changed. Please try again later. {0}"
+}

@@ -34,7 +34,7 @@ public sealed class LibraryService(string dataDirectory)
                 foreach (var item in index.Items) _items[item.FilePath] = item;
                 foreach (var entry in index.Removed) _removed[entry.Key] = entry.Value;
             }
-            catch (JsonException ex) { throw new IOException("无法读取媒体库，原索引已保留。", ex); }
+            catch (JsonException ex) { throw new IOException(Localizer.T("无法读取媒体库，原索引已保留。"), ex); }
         }
         _loaded = true;
     }
@@ -170,7 +170,7 @@ public sealed class LibraryService(string dataDirectory)
             await LoadLockedAsync();
             if (!_items.TryGetValue(item.FilePath, out var stored)) return;
             if (stored.Id != item.Id || stored.CompletedAt != item.CompletedAt)
-                throw new IOException("记录已更新，请刷新后重试。");
+                throw new IOException(Localizer.T("记录已更新，请刷新后重试。"));
             cancellationToken.ThrowIfCancellationRequested();
             if (deleteFile) await Task.Run(() => DeleteRecordedFile(stored.FilePath), cancellationToken);
 
@@ -210,13 +210,13 @@ public sealed class LibraryService(string dataDirectory)
         for (var parent = Directory.GetParent(path); parent is not null; parent = parent.Parent)
         {
             if (parent.Exists && (parent.Attributes & System.IO.FileAttributes.ReparsePoint) != 0)
-                throw new IOException("文件路径已重定向，请在资源管理器中核对后删除。");
+                throw new IOException(Localizer.T("文件路径已重定向，请在资源管理器中核对后删除。"));
         }
         try
         {
             var attributes = File.GetAttributes(path);
             if ((attributes & (System.IO.FileAttributes.Directory | System.IO.FileAttributes.ReparsePoint)) != 0)
-                throw new IOException("文件路径已改变，不能删除目录或链接。");
+                throw new IOException(Localizer.T("文件路径已改变，不能删除目录或链接。"));
             File.Delete(path);
         }
         catch (FileNotFoundException) { }
@@ -267,7 +267,7 @@ public sealed class LibraryService(string dataDirectory)
 
     public void OpenFile(MediaItem item)
     {
-        if (!File.Exists(item.FilePath)) throw new FileNotFoundException("视频文件已移动或删除", item.FilePath);
+        if (!File.Exists(item.FilePath)) throw new FileNotFoundException(Localizer.T("视频文件已移动或删除"), item.FilePath);
         Process.Start(new ProcessStartInfo(item.FilePath) { UseShellExecute = true });
     }
 
@@ -281,7 +281,7 @@ public sealed class LibraryService(string dataDirectory)
         else
         {
             var directory = Path.GetDirectoryName(item.FilePath);
-            if (directory is null || !Directory.Exists(directory)) throw new DirectoryNotFoundException("原保存文件夹已不存在");
+            if (directory is null || !Directory.Exists(directory)) throw new DirectoryNotFoundException(Localizer.T("原保存文件夹已不存在"));
             start.ArgumentList.Add(directory);
         }
         Process.Start(start);

@@ -12,6 +12,23 @@ public sealed partial class MainWindow
     private string? _updateInstaller;
     private bool _updateBusy;
     private bool _updateChecked;
+    private string _updateStatusSource = "可手动检查更新。";
+    private object[] _updateStatusArguments = [];
+
+    private void SetUpdateStatus(string source, params object[] arguments)
+    {
+        _updateStatusSource = source;
+        _updateStatusArguments = arguments;
+        RefreshUpdateLocalization();
+    }
+
+    private void RefreshUpdateLocalization()
+    {
+        UpdateStatusText.Text = Localizer.TranslateExisting(Localizer.T(_updateStatusSource, _updateStatusArguments));
+        UpdateNotesHeading.Text = _availableUpdate is null
+            ? Localizer.T("本次更新") : Localizer.T("V{0} 更新内容", _availableUpdate.Version);
+        if (_availableUpdate is not null) UpdateNotesText.Text = _availableUpdate.ReleaseNotes;
+    }
 
     private async Task CheckUpdatesAtStartupAsync()
     {
@@ -48,7 +65,7 @@ public sealed partial class MainWindow
         _updateCancellation = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
         _availableUpdate = null;
         _updateInstaller = null;
-        UpdateStatusText.Text = "正在连接 GitHub，检查更新…";
+        SetUpdateStatus("正在连接 GitHub，检查更新…");
         UpdateProgress.Value = 0;
         UpdateProgress.IsIndeterminate = true;
         UpdateReleaseLink.Visibility = Visibility.Collapsed;
@@ -59,19 +76,19 @@ public sealed partial class MainWindow
             _availableUpdate = await _updates.CheckAsync(UpdateService.CurrentVersion, _updateCancellation.Token);
             if (_availableUpdate is null)
             {
-                UpdateStatusText.Text = "当前没有比 V" + UpdateService.CurrentVersion + " 更新的正式版本。";
-                if (manual) ShowNotice("检查完成", UpdateStatusText.Text, InfoBarSeverity.Success);
+                SetUpdateStatus("当前没有比 V{0} 更新的正式版本。", UpdateService.CurrentVersion);
+                if (manual) ShowNotice(Localizer.T("检查完成"), UpdateStatusText.Text, InfoBarSeverity.Success);
             }
             else
             {
                 UpdateReleaseLink.NavigateUri = _availableUpdate.ReleaseUrl;
                 UpdateReleaseLink.Visibility = Visibility.Visible;
-                UpdateNotesHeading.Text = $"V{_availableUpdate.Version} 更新内容";
+                UpdateNotesHeading.Text = Localizer.T("V{0} 更新内容", _availableUpdate.Version);
                 UpdateNotesText.Text = _availableUpdate.ReleaseNotes;
                 UpdateNotesPanel.Visibility = Visibility.Visible;
-                UpdateStatusText.Text = $"发现 V{_availableUpdate.Version} · {_availableUpdate.Size / 1024d / 1024d:F1} MB";
+                SetUpdateStatus("发现 V{0} · {1:F1} MB", _availableUpdate.Version, _availableUpdate.Size / 1024d / 1024d);
                 if (AppServices.Settings.AutomaticUpdates) await DownloadUpdateCoreAsync(_updateCancellation.Token);
-                else ShowNotice("发现新版本", "前往设置 → 软件更新下载并安装。", InfoBarSeverity.Informational);
+                else ShowNotice(Localizer.T("发现新版本"), Localizer.T("前往设置 → 软件更新下载并安装。"), InfoBarSeverity.Informational);
             }
         }
         catch (Exception ex) { ReportUpdateFailure(ex, manual); }
@@ -92,16 +109,16 @@ public sealed partial class MainWindow
     {
         UpdateProgress.IsIndeterminate = false;
         UpdateProgress.Value = 0;
-        UpdateStatusText.Text = $"正在下载 V{_availableUpdate!.Version}…";
+        SetUpdateStatus("正在下载 V{0}…", _availableUpdate!.Version);
         var progress = new Progress<double>(value =>
         {
             if (_exiting || !_updateBusy || token.IsCancellationRequested) return;
             UpdateProgress.Value = value;
-            UpdateStatusText.Text = $"正在下载 V{_availableUpdate.Version} · {value:F0}%";
+            SetUpdateStatus("正在下载 V{0} · {1:F0}%", _availableUpdate.Version, value);
         });
         _updateInstaller = await _updates.DownloadAsync(_availableUpdate, progress, token);
-        UpdateStatusText.Text = $"V{_availableUpdate.Version} 已下载并通过校验，可以安装。";
-        ShowNotice("更新已准备好", "前往设置 → 软件更新，点击“安装更新”。", InfoBarSeverity.Success);
+        SetUpdateStatus("V{0} 已下载并通过校验，可以安装。", _availableUpdate.Version);
+        ShowNotice(Localizer.T("更新已准备好"), Localizer.T("前往设置 → 软件更新，点击“安装更新”。"), InfoBarSeverity.Success);
     }
 
     private void CancelUpdate_Click(object sender, RoutedEventArgs e) => _updateCancellation?.Cancel();
@@ -114,6 +131,7 @@ public sealed partial class MainWindow
         InstallUpdateButton.Visibility = !busy && _updateInstaller is not null ? Visibility.Visible : Visibility.Collapsed;
         CancelUpdateButton.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
         UpdateProgress.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+        UpdateRepairButton();
     }
 
     private void FinishUpdateOperation()
@@ -126,16 +144,16 @@ public sealed partial class MainWindow
     private void ReportUpdateFailure(Exception exception, bool notify)
     {
         if (_lifetime.IsCancellationRequested) return;
-        UpdateStatusText.Text = exception switch
+        SetUpdateStatus(exception switch
         {
             OperationCanceledException when _updateCancellation?.IsCancellationRequested == true => "已取消更新，可随时重试。",
             OperationCanceledException => "连接 GitHub 超时，请稍后重试。",
             HttpRequestException => "暂时无法连接 GitHub，可能是网络不可达或请求受限，请稍后重试。",
             InvalidDataException => exception.Message,
             _ => "更新未完成，请检查网络、磁盘空间与文件权限后重试。"
-        };
+        });
         AppServices.Log("软件更新", exception);
-        if (notify) ShowNotice("更新未完成", UpdateStatusText.Text, InfoBarSeverity.Warning);
+        if (notify) ShowNotice(Localizer.T("更新未完成"), UpdateStatusText.Text, InfoBarSeverity.Warning);
     }
 
     private async void InstallUpdate_Click(object sender, RoutedEventArgs e)
@@ -148,14 +166,14 @@ public sealed partial class MainWindow
         {
             var dialog = new ContentDialog
             {
-                XamlRoot = Root.XamlRoot, Title = $"安装 V{_availableUpdate.Version}",
+                XamlRoot = Root.XamlRoot, RequestedTheme = Root.RequestedTheme, Language = Localizer.CurrentLanguage, Title = Localizer.T("安装 V{0}", _availableUpdate.Version),
                 Content = new StackPanel
                 {
                     Spacing = 12,
                     Children =
                     {
-                        new TextBlock { Text = "Lumiven 将先停止微信接入并恢复代理，然后退出并打开安装向导。下载视频、媒体库和设置会保留。请完成安装后重新打开软件。", TextWrapping = TextWrapping.Wrap },
-                        new TextBlock { Text = "本次更新", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold },
+                        new TextBlock { Text = Localizer.T("Lumiven 将先停止微信接入并恢复代理，然后退出并打开安装向导。下载视频、媒体库和设置会保留。请完成安装后重新打开软件。"), TextWrapping = TextWrapping.Wrap },
+                        new TextBlock { Text = Localizer.T("本次更新"), FontWeight = Microsoft.UI.Text.FontWeights.SemiBold },
                         new ScrollViewer
                         {
                             MaxHeight = 220, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
@@ -163,13 +181,13 @@ public sealed partial class MainWindow
                         }
                     }
                 },
-                PrimaryButtonText = "继续安装", CloseButtonText = "稍后", DefaultButton = ContentDialogButton.Close
+                PrimaryButtonText = Localizer.T("继续安装"), CloseButtonText = Localizer.T("稍后"), DefaultButton = ContentDialogButton.Close
             };
             if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
             var tasks = await AppServices.Engine.GetTasksAsync();
             if (AppServices.Links.HasActiveTasks || tasks.Any(t => t.Status is "queued" or "pending" or "downloading" or "processing" or "saving"))
             {
-                ShowNotice("请稍后安装", "仍有视频任务未完成，请等待下载结束后再安装更新。", InfoBarSeverity.Warning);
+                ShowNotice(Localizer.T("请稍后安装"), Localizer.T("仍有视频任务未完成，请等待下载结束后再安装更新。"), InfoBarSeverity.Warning);
                 return;
             }
             await _updates.VerifyInstallerAsync(_availableUpdate, _updateInstaller, _lifetime.Token);

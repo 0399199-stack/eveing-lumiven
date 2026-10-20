@@ -9,6 +9,7 @@
   <ItemGroup>
     <Compile Include="../Lumiven/Models/*.cs" Link="Models/%(Filename)%(Extension)" />
     <Compile Include="../Lumiven/Services/AppServices.cs" Link="Services/AppServices.cs" />
+    <Compile Include="../Lumiven/Services/Localizer.cs" Link="Services/Localizer.cs" />
     <Compile Include="../Lumiven/Services/EngineClient.cs" Link="Services/EngineClient.cs" />
     <Compile Include="../Lumiven/Services/LibraryService.cs" Link="Services/LibraryService.cs" />
     <Compile Include="../Lumiven/Services/TrayService.cs" Link="Services/TrayService.cs" />
@@ -17,5 +18,8 @@
     <Compile Include="../Lumiven/Services/VideoLinkHttp.cs" Link="Services/VideoLinkHttp.cs" />
     <Compile Include="../Lumiven/Services/XiaohongshuLink.cs" Link="Services/XiaohongshuLink.cs" />
     <Compile Include="../Lumiven/Services/LinkDownloadService.cs" Link="Services/LinkDownloadService.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="../Lumiven/Localization/*.en.json" Link="Localization/%(Filename)%(Extension)" WithCulture="false" />
   </ItemGroup>
 </Project>

@@ -14,6 +14,9 @@ if (args.Contains("--check-updates-live"))
     Console.WriteLine(JsonSerializer.Serialize(new { githubReachable = true, availableVersion = update?.Version.ToString(), downloaded = false }));
     return;
 }
+await LocalizationTests.RunAsync();
+if (args.Contains("--localization-only")) return;
+await EngineRepairTests.RunAsync();
 await UpdateTests.RunAsync();
 await LinkDownloadTests.RunAsync();
 

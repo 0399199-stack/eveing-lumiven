@@ -3,6 +3,7 @@
     xmlns:controls="using:Lumiven.Controls">
   <ResourceDictionary.ThemeDictionaries>
     <ResourceDictionary x:Key="Light">
+      <x:Double x:Key="AmbientOpacity">0.65</x:Double>
       <LinearGradientBrush x:Key="CanvasBrush" StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#F8F7F6" Offset="0"/><GradientStop Color="#FAFAFB" Offset="0.54"/><GradientStop Color="#EDF0F4" Offset="1"/></LinearGradientBrush>
       <SolidColorBrush x:Key="CanvasSolidBrush" Color="#F5F5F6" />
       <AcrylicBrush x:Key="GlassBrush" TintColor="#EEF1F5" TintOpacity="0.68" FallbackColor="#F3F5F8" />
@@ -13,10 +14,20 @@
       <LinearGradientBrush x:Key="GlassEdgeBrush" StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#FFFFFFFF" Offset="0"/><GradientStop Color="#D8FFFFFF" Offset="0.4"/><GradientStop Color="#A9B4C3D3" Offset="0.78"/><GradientStop Color="#FFFFFFFF" Offset="1"/></LinearGradientBrush>
       <SolidColorBrush x:Key="PrimaryBrush" Color="#102854" />
       <SolidColorBrush x:Key="MutedBrush" Color="#71849E" />
+      <SolidColorBrush x:Key="ErrorBrush" Color="#AF3F50" />
       <SolidColorBrush x:Key="SurfaceBrush" Color="#E7ECF2" />
       <SolidColorBrush x:Key="DividerBrush" Color="#C9D4E0" />
       <SolidColorBrush x:Key="AccentBrush" Color="#2475E4" />
       <SolidColorBrush x:Key="AccentSoftBrush" Color="#DDEBFC" />
+      <SolidColorBrush x:Key="AccentButtonBackground" Color="#176DAD" />
+      <SolidColorBrush x:Key="AccentButtonBackgroundPointerOver" Color="#1B78BA" />
+      <SolidColorBrush x:Key="AccentButtonBackgroundPressed" Color="#145B91" />
+      <SolidColorBrush x:Key="AccentButtonForeground" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="AccentButtonForegroundPointerOver" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="AccentButtonForegroundPressed" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="AccentButtonBorderBrush" Color="#86BEDF" />
+      <SolidColorBrush x:Key="AccentButtonBorderBrushPointerOver" Color="#A5D8F3" />
+      <SolidColorBrush x:Key="AccentButtonBorderBrushPressed" Color="#6CA7CD" />
       <SolidColorBrush x:Key="PanelShadeBrush" Color="#233D5E83" />
       <LinearGradientBrush x:Key="SelectionBrush" StartPoint="0,0" EndPoint="1,0"><GradientStop Color="#F6FCFF"/><GradientStop Color="#DCEBFE" Offset="1"/></LinearGradientBrush>
       <SolidColorBrush x:Key="SelectionEdgeBrush" Color="#DEFFFFFF" />
@@ -27,6 +38,7 @@
       <AcrylicBrush x:Key="SidebarBrush" TintColor="#FFFFFF" TintOpacity="0.72" FallbackColor="#F8F9FC" />
     </ResourceDictionary>
     <ResourceDictionary x:Key="Default">
+      <x:Double x:Key="AmbientOpacity">0.10</x:Double>
       <LinearGradientBrush x:Key="CanvasBrush" StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#153B57"/><GradientStop Color="#0C2C45" Offset="0.5"/><GradientStop Color="#173F5C" Offset="1"/></LinearGradientBrush>
       <SolidColorBrush x:Key="CanvasSolidBrush" Color="#10283B" />
       <AcrylicBrush x:Key="GlassBrush" TintColor="#254663" TintOpacity="0.48" FallbackColor="#243E52" />
@@ -37,10 +49,20 @@
       <LinearGradientBrush x:Key="GlassEdgeBrush" StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#7ED6F5FF" Offset="0"/><GradientStop Color="#33D6F5FF" Offset="0.3"/><GradientStop Color="#123CBDE5" Offset="0.7"/><GradientStop Color="#48D6F5FF" Offset="1"/></LinearGradientBrush>
       <SolidColorBrush x:Key="PrimaryBrush" Color="#E8F8FF" />
       <SolidColorBrush x:Key="MutedBrush" Color="#9EBCCF" />
+      <SolidColorBrush x:Key="ErrorBrush" Color="#FFB4BD" />
       <SolidColorBrush x:Key="SurfaceBrush" Color="#752E526C" />
       <SolidColorBrush x:Key="DividerBrush" Color="#3189BADC" />
       <SolidColorBrush x:Key="AccentBrush" Color="#8DDCFF" />
       <SolidColorBrush x:Key="AccentSoftBrush" Color="#287ACCED" />
+      <SolidColorBrush x:Key="AccentButtonBackground" Color="#8DDCFF" />
+      <SolidColorBrush x:Key="AccentButtonBackgroundPointerOver" Color="#A6E5FF" />
+      <SolidColorBrush x:Key="AccentButtonBackgroundPressed" Color="#73C7EA" />
+      <SolidColorBrush x:Key="AccentButtonForeground" Color="#102854" />
+      <SolidColorBrush x:Key="AccentButtonForegroundPointerOver" Color="#102854" />
+      <SolidColorBrush x:Key="AccentButtonForegroundPressed" Color="#102854" />
+      <SolidColorBrush x:Key="AccentButtonBorderBrush" Color="#BCEEFF" />
+      <SolidColorBrush x:Key="AccentButtonBorderBrushPointerOver" Color="#D6F6FF" />
+      <SolidColorBrush x:Key="AccentButtonBorderBrushPressed" Color="#8BCDE9" />
       <SolidColorBrush x:Key="PanelShadeBrush" Color="#45102335" />
       <SolidColorBrush x:Key="SelectionBrush" Color="#344E69" />
       <SolidColorBrush x:Key="SelectionEdgeBrush" Color="#526D89" />
@@ -76,14 +98,14 @@
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="HorizontalContentAlignment" Value="Left" />
     <Setter Property="Height" Value="53" />
-    <Setter Property="FontSize" Value="15" />
+    <Setter Property="FontSize" Value="14" />
     <Setter Property="CornerRadius" Value="17" />
-    <Setter Property="Padding" Value="26,9" />
+    <Setter Property="Padding" Value="16,9" />
   </Style>
   <Style x:Key="IceAccentButton" TargetType="Button" BasedOn="{StaticResource AccentButtonStyle}">
-    <Setter Property="Background" Value="#1A8FCB" />
-    <Setter Property="Foreground" Value="White" />
-    <Setter Property="BorderBrush" Value="#B9EAFF" />
+    <Setter Property="Background" Value="{ThemeResource AccentButtonBackground}" />
+    <Setter Property="Foreground" Value="{ThemeResource AccentButtonForeground}" />
+    <Setter Property="BorderBrush" Value="{ThemeResource AccentButtonBorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="14" />
     <Setter Property="Padding" Value="18,12" />
@@ -102,6 +124,7 @@
     <Setter Property="FontSize" Value="13" />
   </Style>
   <controls:StatusConverter x:Key="StatusConverter" />
+  <controls:ErrorLocalizationConverter x:Key="ErrorLocalizationConverter" />
   <controls:LinkCancelVisibilityConverter x:Key="LinkCancelVisibilityConverter" />
   <controls:ActiveTaskConverter x:Key="ActiveTaskConverter" />
   <controls:FileSizeConverter x:Key="FileSizeConverter" />

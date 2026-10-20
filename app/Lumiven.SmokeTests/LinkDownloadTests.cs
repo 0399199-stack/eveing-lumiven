@@ -76,7 +76,12 @@ internal static class LinkDownloadTests
             await service.InitializeAsync();
             if (mode == "record-failure") Directory.CreateDirectory(Path.Combine(data, "library.json.tmp"));
             var statuses = new List<string>();
-            service.TaskUpdated += (_, task) => statuses.Add(task.Status);
+            Task<IReadOnlyList<string>>? clearDuringFinalization = null;
+            service.TaskUpdated += (_, task) =>
+            {
+                statuses.Add(task.Status);
+                if (mode == "success" && task.Status == "completed") clearDuringFinalization = service.ClearFinishedTasksAsync();
+            };
             service.Start("分享 " + Short);
             if (mode == "cancel")
             {
@@ -92,6 +97,8 @@ internal static class LinkDownloadTests
                 var records = await new LibraryService(data).GetAllAsync();
                 Check(records.Single().Title == "测试标题" && records.Single().Author == "作者", "Library survives restart with metadata");
                 Check(statuses.Contains("parsing") && statuses.Contains("downloading") && statuses.Contains("saving"), "Real stages emitted");
+                Check(clearDuringFinalization is not null && (await clearDuringFinalization).Count == 0,
+                    "A terminal event cannot clear a worker that is still finalizing");
             }
             else
             {
@@ -105,13 +112,68 @@ internal static class LinkDownloadTests
             await restored.InitializeAsync();
             Check(restored.GetTasks().Single().Status == task.Status, $"Task status persists: {mode}");
             Check(!(await File.ReadAllTextAsync(Path.Combine(data, "link-tasks.json"))).Contains("https://"), "Cache contains no share or media tokens");
+            var removed = await service.ClearFinishedTasksAsync();
+            Check(removed.SequenceEqual(new[] { task.Id }) && service.GetTasks().Count == 0, $"Exact finished record cleared: {mode}");
+            var clearedRestart = new LinkDownloadService(settings, new LibraryService(data), data);
+            await clearedRestart.InitializeAsync();
+            Check(clearedRestart.GetTasks().Count == 0, $"Cleared record does not return after restart: {mode}");
+            if (mode == "success")
+                Check(File.Exists(task.FilePath) && (await File.ReadAllBytesAsync(task.FilePath)).SequenceEqual(Mp4) &&
+                    (await new LibraryService(data).GetAllAsync()).Single().FilePath == task.FilePath,
+                    "Clearing task history preserves the downloaded file and library record");
         }
         var interrupted = new DownloadTask { Id = "interrupted", Status = "downloading", Title = "中断测试" };
         await File.WriteAllTextAsync(Path.Combine(root, "link-tasks.json"), JsonSerializer.Serialize(new[] { interrupted }, AppServices.JsonOptions));
         var recovering = new LinkDownloadService(new(), new(root), root);
         await recovering.InitializeAsync();
         Check(recovering.GetTasks().Single().Status == "interrupted", "Interrupted download restored truthfully");
-        Console.WriteLine("PASS Douyin short-link parsing, downloads, cancellation, failures and persistence");
+        Check((await recovering.ClearFinishedTasksAsync()).SequenceEqual(new[] { interrupted.Id }), "Interrupted history can be cleared");
+        await ClearHistoryRegressionAsync(Path.Combine(root, "clear-history"));
+        Console.WriteLine("PASS Douyin short-link parsing, downloads, cancellation, failures, history clearing and persistence");
+    }
+
+    private static async Task ClearHistoryRegressionAsync(string root)
+    {
+        Directory.CreateDirectory(root);
+        string cache = Path.Combine(root, "link-tasks.json");
+        var finished = new[] { "completed", "failed", "cancelled", "interrupted" }
+            .Select(status => new DownloadTask { Id = "douyin-old-" + status, Status = status }).ToArray();
+        await File.WriteAllTextAsync(cache, JsonSerializer.Serialize(finished, AppServices.JsonOptions));
+        var fixture = new Fixture("cancel");
+        var service = new LinkDownloadService(new(), new(root), root)
+        {
+            ClientFactory = () => new HttpClient(fixture) { Timeout = Timeout.InfiniteTimeSpan }
+        };
+        await service.InitializeAsync();
+        service.Start(Short);
+        await fixture.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        service.Start(Short);
+        try
+        {
+            var removed = await service.ClearFinishedTasksAsync();
+            Check(removed.ToHashSet().SetEquals(finished.Select(task => task.Id)), "All finished statuses are cleared together");
+            Check(service.GetTasks().Count == 2 && service.GetTasks().All(task => task.Status is "parsing" or "queued"),
+                "Clearing history preserves active and queued tasks");
+        }
+        finally { await service.StopAsync().WaitAsync(TimeSpan.FromSeconds(10)); }
+        Check(service.GetTasks().Count == 2 && service.GetTasks().All(task => task.Status == "cancelled"),
+            "Worker completion and later cache saves do not resurrect cleared history");
+        var restarted = new LinkDownloadService(new(), new(root), root);
+        await restarted.InitializeAsync();
+        Check(restarted.GetTasks().Count == 2 && !restarted.GetTasks().Any(task => task.Id.StartsWith("douyin-old-")),
+            "Concurrent worker saves preserve cleared history after restart");
+
+        string before = await File.ReadAllTextAsync(cache);
+        Directory.CreateDirectory(cache + ".tmp");
+        bool failed = false;
+        try { await service.ClearFinishedTasksAsync(); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { failed = true; }
+        finally { Directory.Delete(cache + ".tmp"); }
+        Check(failed && service.GetTasks().Count == 2 && await File.ReadAllTextAsync(cache) == before,
+            "Cache-write failure reports an error and preserves memory and persisted records");
+        Check((await service.ClearFinishedTasksAsync()).Count == 2 && service.GetTasks().Count == 0,
+            "Clearing can be retried after a cache-write failure");
+        Check((await service.ClearFinishedTasksAsync()).Count == 0, "Clearing empty history is harmless");
     }
 
     public static async Task LiveAsync(string link, string root, bool xiaohongshu = false)

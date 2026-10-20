@@ -12,9 +12,12 @@ using Lumiven.Models;
 
 namespace Lumiven.Services;
 
+public enum EngineRepairResult { NoActionNeeded, Recovered }
+
 public sealed class EngineClient(AppSettings settings, LibraryService library, string dataDirectory)
 {
     private readonly ConcurrentDictionary<string, DownloadTask> _tasks = new();
+    private readonly object _taskUpdatesGate = new();
     private readonly SemaphoreSlim _lifecycle = new(1, 1);
     private readonly SemaphoreSlim _cacheGate = new(1, 1);
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(8) };
@@ -27,17 +30,21 @@ public sealed class EngineClient(AppSettings settings, LibraryService library, s
     private Uri? _baseUri;
     private string _token = "";
     private bool _stopRequested;
+    private bool _interruptedCachePending;
     private string CoreDirectory => Path.Combine(dataDirectory, "core");
     private string SystemLeasePath => Path.Combine(CoreDirectory, "system-lease.json");
     public event EventHandler<string>? StatusChanged;
     public event EventHandler<DownloadTask>? TaskUpdated;
     public bool IsRunning { get; private set; }
-    public string StatusText { get; private set; } = "微信下载未启用";
+    private string _statusText = "微信下载未启用";
+    public string StatusText => Localizer.TranslateExisting(_statusText);
     public string StatusState { get; private set; } = "disabled";
+    public bool HasPendingRecovery => IsRunning || !HasEngineExited() || _recoveryProcess is not null ||
+        StatusState == "recovery_required" || SystemLeaseExists();
 
     public async Task InitializeAsync()
     {
-        if (File.Exists(SystemLeasePath))
+        if (SystemLeaseExists())
             SetStatus("recovery_required", "上次接入的恢复尚未确认，请先点击停止接入并恢复原代理。");
         var path = Path.Combine(dataDirectory, "task-cache.json");
         if (!File.Exists(path)) return;
@@ -67,9 +74,9 @@ public sealed class EngineClient(AppSettings settings, LibraryService library, s
         {
             if (IsRunning && StatusState == "ready" && !_stopRequested) return;
             // Keep the old process and token until its exit and proxy restoration are confirmed.
-            if (_process is not null || File.Exists(SystemLeasePath)) await StopCoreAsync();
+            if (_process is not null || SystemLeaseExists()) await StopCoreAsync();
             var enginePath = FindEnginePath();
-            if (enginePath is null) throw new FileNotFoundException("找不到下载内核，请重新安装 EVEING Lumiven。");
+            if (enginePath is null) throw new FileNotFoundException(Localizer.T("找不到下载内核，请重新安装 EVEING Lumiven。"));
             var coreDirectory = CoreDirectory;
             Directory.CreateDirectory(coreDirectory);
             Directory.CreateDirectory(settings.DownloadDirectory);
@@ -94,7 +101,7 @@ public sealed class EngineClient(AppSettings settings, LibraryService library, s
             _stopRequested = false;
             activation.Token.ThrowIfCancellationRequested();
             _process = Process.Start(start);
-            if (_process is null) throw new InvalidOperationException("Windows 未返回下载内核进程，无法确认接入状态。");
+            if (_process is null) throw new InvalidOperationException(Localizer.T("Windows 未返回下载内核进程，无法确认接入状态。"));
             _session = new CancellationTokenSource();
             var startupTimeout = Stopwatch.StartNew();
             while (startupTimeout.Elapsed < TimeSpan.FromSeconds(150))
@@ -102,7 +109,7 @@ public sealed class EngineClient(AppSettings settings, LibraryService library, s
                 try
                 {
                     var status = await ReadStatusAsync(activation.Token);
-                    if (status.State == "failed") throw new InvalidOperationException(status.Error ?? "微信下载接入失败");
+                    if (status.State == "failed") throw new InvalidOperationException(status.Error ?? Localizer.T("微信下载接入失败"));
                     if (status.State == "ready")
                     {
                         activation.Token.ThrowIfCancellationRequested();
@@ -119,7 +126,7 @@ public sealed class EngineClient(AppSettings settings, LibraryService library, s
                 if (HasEngineExited()) break;
                 await Task.Delay(500, activation.Token);
             }
-            throw new InvalidOperationException("下载服务未能启动，请检查权限与日志后重试。");
+            throw new InvalidOperationException(Localizer.T("下载服务未能启动，请检查权限与日志后重试。"));
         }
         catch (OperationCanceledException) when (activation?.IsCancellationRequested == true) { }
         catch (Exception ex)
@@ -135,7 +142,7 @@ public sealed class EngineClient(AppSettings settings, LibraryService library, s
             {
                 if (!HasEngineExited()) StartMonitoring();
                 AppServices.Log("启用失败后的恢复", cleanupError);
-                throw new InvalidOperationException("启用失败且接入恢复尚未确认，请点击停止接入并查看本地日志。", ex);
+                throw new InvalidOperationException(Localizer.T("启用失败且接入恢复尚未确认，请点击停止接入并查看本地日志。"), ex);
             }
             throw;
         }
@@ -147,14 +154,19 @@ public sealed class EngineClient(AppSettings settings, LibraryService library, s
         }
     }
 
-    public async Task StopAsync()
+    public Task StopAsync() => StopAndSaveAsync(onlyIfNeeded: false);
+
+    public Task<EngineRepairResult> RepairAsync() => StopAndSaveAsync(onlyIfNeeded: true);
+
+    private async Task<EngineRepairResult> StopAndSaveAsync(bool onlyIfNeeded)
     {
         try { _activation?.Cancel(); } catch (ObjectDisposedException) { }
         await _lifecycle.WaitAsync();
         try
         {
-            await StopCoreAsync();
-            await SaveCacheAsync();
+            bool recovered = await StopCoreAsync();
+            if (recovered || !onlyIfNeeded) await SaveCacheAsync();
+            return recovered ? EngineRepairResult.Recovered : EngineRepairResult.NoActionNeeded;
         }
         catch
         {
@@ -164,8 +176,11 @@ public sealed class EngineClient(AppSettings settings, LibraryService library, s
         finally { _lifecycle.Release(); }
     }
 
-    private async Task StopCoreAsync()
+    private async Task<bool> StopCoreAsync()
     {
+        // Inspect the owned lease even if no process is running. An unreadable lease is not a clean state.
+        bool hasLease = SystemLeaseExists();
+        bool hadPendingRecovery = hasLease || _recoveryProcess is not null || !HasEngineExited();
         _stopRequested = true;
         Exception? shutdownError = null;
         if (!HasEngineExited())
@@ -185,7 +200,7 @@ public sealed class EngineClient(AppSettings settings, LibraryService library, s
                 var message = "下载内核仍在运行，停止尚未确认。请重试停止接入；恢复完成前不能重新启用或退出。";
                 IsRunning = true;
                 SetStatus("recovery_required", message);
-                throw new InvalidOperationException(message, shutdownError);
+                throw new InvalidOperationException(Localizer.T(message), shutdownError);
             }
         }
         // A native process exit alone does not prove that its deferred system cleanup succeeded.
@@ -203,12 +218,14 @@ public sealed class EngineClient(AppSettings settings, LibraryService library, s
         }
         _process?.Dispose(); _process = null;
         _baseUri = null; _token = "";
-        SetStatus("disabled", "微信下载已停止，原代理已恢复");
+        SetStatus("disabled", hadPendingRecovery ? "微信下载已停止，原代理已恢复" : "微信下载未启用");
+        await InterruptUnfinishedTasksAsync();
+        return hadPendingRecovery;
     }
 
     private async Task RequestShutdownAsync()
     {
-        if (_baseUri is null) throw new InvalidOperationException("缺少原内核管理地址，无法请求停止。");
+        if (_baseUri is null) throw new InvalidOperationException(Localizer.T("缺少原内核管理地址，无法请求停止。"));
         using var response = await _http.PostAsync(new Uri(_baseUri, "api/desktop/shutdown"), null);
         response.EnsureSuccessStatusCode();
     }
@@ -230,10 +247,10 @@ public sealed class EngineClient(AppSettings settings, LibraryService library, s
 
     private async Task RecoverOwnedSystemAsync()
     {
-        if (_recoveryProcess is null && !File.Exists(SystemLeasePath)) return;
+        if (_recoveryProcess is null && !SystemLeaseExists()) return;
         if (_recoveryProcess is null)
         {
-            string executable = FindEnginePath() ?? throw new FileNotFoundException("缺少用于恢复原代理的下载内核，请重新安装软件后重试。");
+            string executable = FindEnginePath() ?? throw new FileNotFoundException(Localizer.T("缺少用于恢复原代理的下载内核，请重新安装软件后重试。"));
             var start = new ProcessStartInfo(executable)
             {
                 UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden,
@@ -242,15 +259,22 @@ public sealed class EngineClient(AppSettings settings, LibraryService library, s
             start.ArgumentList.Add("--desktop-recover");
             start.ArgumentList.Add("--desktop-data-dir");
             start.ArgumentList.Add(CoreDirectory);
-            _recoveryProcess = Process.Start(start) ?? throw new InvalidOperationException("无法启动代理恢复工具。");
+            _recoveryProcess = Process.Start(start) ?? throw new InvalidOperationException(Localizer.T("无法启动代理恢复工具。"));
         }
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(150));
         try { await _recoveryProcess.WaitForExitAsync(timeout.Token); }
-        catch (OperationCanceledException) { throw new InvalidOperationException("代理恢复工具仍在运行，请稍后重试。"); }
+        catch (OperationCanceledException) { throw new InvalidOperationException(Localizer.T("代理恢复工具仍在运行，请稍后重试。")); }
         int exitCode = _recoveryProcess.ExitCode;
         _recoveryProcess.Dispose(); _recoveryProcess = null;
-        if (exitCode != 0 || File.Exists(SystemLeasePath))
-            throw new InvalidOperationException("代理恢复工具未确认完成，请检查接入日志。");
+        if (exitCode != 0 || SystemLeaseExists())
+            throw new InvalidOperationException(Localizer.T("代理恢复工具未确认完成，请检查接入日志。"));
+    }
+
+    private bool SystemLeaseExists()
+    {
+        try { _ = File.GetAttributes(SystemLeasePath); return true; }
+        catch (FileNotFoundException) { return false; }
+        catch (DirectoryNotFoundException) { return false; }
     }
 
     public Task<IReadOnlyList<DownloadTask>> GetTasksAsync() => Task.FromResult<IReadOnlyList<DownloadTask>>(_tasks.Values.OrderByDescending(x => x.CreatedAt).ToList());
@@ -268,11 +292,8 @@ public sealed class EngineClient(AppSettings settings, LibraryService library, s
         var completed = new List<DownloadTask>();
         foreach (var task in snapshot?.Tasks ?? [])
         {
-            task.NormalizeProgress();
-            if (_tasks.TryGetValue(task.Id, out var previous) && previous.UpdatedAt == task.UpdatedAt && previous.Status == task.Status && previous.BytesReceived == task.BytesReceived) continue;
-            _tasks[task.Id] = task;
+            if (!ApplyTaskUpdate(task, cancellationToken, skipUnchanged: true)) continue;
             if (task.Status == "completed") completed.Add(task);
-            TaskUpdated?.Invoke(this, task);
         }
         if (completed.Count != 0) await library.RecordManyAsync(completed);
         await SaveCacheAsync();
@@ -287,7 +308,7 @@ public sealed class EngineClient(AppSettings settings, LibraryService library, s
             {
                 await Task.Delay(4000, cancellationToken);
                 var status = await ReadStatusAsync(cancellationToken);
-                if (status.State == "failed") throw new InvalidOperationException(status.Error ?? "内核报告接入失败");
+                if (status.State == "failed") throw new InvalidOperationException(status.Error ?? Localizer.T("内核报告接入失败"));
                 await FetchSnapshotAsync(cancellationToken);
                 failures = 0;
                 if (status.State == "ready" && !_stopRequested && StatusState != "ready")
@@ -319,6 +340,7 @@ public sealed class EngineClient(AppSettings settings, LibraryService library, s
                     IsRunning = false;
                     await RecoverOwnedSystemAsync();
                     CancelSession();
+                    await InterruptUnfinishedTasksAsync();
                     _process?.Dispose(); _process = null;
                     _baseUri = null; _token = "";
                     if (_stopRequested) SetStatus("disabled", "微信下载已停止，原代理已恢复");
@@ -369,10 +391,8 @@ public sealed class EngineClient(AppSettings settings, LibraryService library, s
                     message.Position = 0;
                     var notification = await JsonSerializer.DeserializeAsync<TaskNotification>(message, AppServices.JsonOptions, cancellationToken);
                     if (notification?.Task is not { } task) continue;
-                    task.NormalizeProgress();
-                    _tasks[task.Id] = task;
                     if (task.Status == "completed") await library.RecordAsync(task);
-                    TaskUpdated?.Invoke(this, task);
+                    ApplyTaskUpdate(task, cancellationToken);
                 }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { break; }
@@ -388,6 +408,43 @@ public sealed class EngineClient(AppSettings settings, LibraryService library, s
     private async Task<EngineStatus> ReadStatusAsync(CancellationToken token) =>
         await _http.GetFromJsonAsync<EngineStatus>(new Uri(_baseUri!, "api/desktop/status"), AppServices.JsonOptions, token) ?? new();
 
+    internal bool ApplyTaskUpdate(DownloadTask task, CancellationToken cancellationToken, bool skipUnchanged = false)
+    {
+        lock (_taskUpdatesGate)
+        {
+            // A socket or snapshot from a cancelled session must never revive a stopped task.
+            if (cancellationToken.IsCancellationRequested) return false;
+            if (skipUnchanged && _tasks.TryGetValue(task.Id, out var previous) && previous.UpdatedAt == task.UpdatedAt &&
+                previous.Status == task.Status && previous.BytesReceived == task.BytesReceived) return false;
+            task.NormalizeProgress();
+            _tasks[task.Id] = task;
+            TaskUpdated?.Invoke(this, task);
+            return true;
+        }
+    }
+
+    private async Task InterruptUnfinishedTasksAsync()
+    {
+        lock (_taskUpdatesGate)
+        {
+            foreach (var task in _tasks.Values)
+            {
+                if (task.Status is "completed" or "failed" or "cancelled" or "interrupted") continue;
+                task.Status = "interrupted";
+                task.Error = "上次下载已中断，请在微信中重新点击下载";
+                task.Speed = 0;
+                task.UpdatedAt = DateTimeOffset.Now;
+                task.NormalizeProgress();
+                _interruptedCachePending = true;
+                TaskUpdated?.Invoke(this, task);
+            }
+        }
+        if (!_interruptedCachePending) return;
+        // Keep the pending flag on failure so a later repair retries persistence.
+        await SaveCacheAsync();
+        _interruptedCachePending = false;
+    }
+
     private async Task SaveCacheAsync()
     {
         await _cacheGate.WaitAsync();
@@ -398,8 +455,8 @@ public sealed class EngineClient(AppSettings settings, LibraryService library, s
     private void SetStatus(string state, string text)
     {
         StatusState = state;
-        StatusText = text;
-        StatusChanged?.Invoke(this, text);
+        _statusText = text;
+        StatusChanged?.Invoke(this, StatusText);
     }
 
     private bool HasEngineExited()
@@ -439,7 +496,7 @@ public sealed class EngineClient(AppSettings settings, LibraryService library, s
             catch (SocketException) { }
             finally { first?.Stop(); second?.Stop(); }
         }
-        throw new InvalidOperationException("找不到可用的本地端口，请关闭旧下载器后重试。");
+        throw new InvalidOperationException(Localizer.T("找不到可用的本地端口，请关闭旧下载器后重试。"));
     }
 
     private sealed class TaskSnapshot { public List<DownloadTask> Tasks { get; set; } = []; }
