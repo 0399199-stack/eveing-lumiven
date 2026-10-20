@@ -13,5 +13,9 @@
     <Compile Include="../Lumiven/Services/LibraryService.cs" Link="Services/LibraryService.cs" />
     <Compile Include="../Lumiven/Services/TrayService.cs" Link="Services/TrayService.cs" />
     <Compile Include="../Lumiven/Services/UpdateService.cs" Link="Services/UpdateService.cs" />
+    <Compile Include="../Lumiven/Services/DouyinShortLink.cs" Link="Services/DouyinShortLink.cs" />
+    <Compile Include="../Lumiven/Services/VideoLinkHttp.cs" Link="Services/VideoLinkHttp.cs" />
+    <Compile Include="../Lumiven/Services/XiaohongshuLink.cs" Link="Services/XiaohongshuLink.cs" />
+    <Compile Include="../Lumiven/Services/LinkDownloadService.cs" Link="Services/LinkDownloadService.cs" />
   </ItemGroup>
 </Project>

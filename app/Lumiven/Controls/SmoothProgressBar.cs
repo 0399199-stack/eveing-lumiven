@@ -43,7 +43,7 @@ public sealed class SmoothProgressBar : ProgressBar
         return true;
     }
 
-    private void UpdateStage() => IsIndeterminate = IsLoaded && Motion.Allowed && IsShown() && TotalBytes <= 0 && TaskStatus is "downloading" or "uploading" or "processing" or "saving";
+    private void UpdateStage() => IsIndeterminate = IsLoaded && Motion.Allowed && IsShown() && TotalBytes <= 0 && TaskStatus is "downloading" or "uploading" or "processing" or "saving" or "parsing";
 
     private static void OnStageChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args)
     {

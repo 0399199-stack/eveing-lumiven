@@ -12,6 +12,7 @@ public static class AppServices
     public static AppSettings Settings { get; } = LoadSettings();
     public static LibraryService Library { get; } = new(DataDirectory);
     public static EngineClient Engine { get; } = new(Settings, Library, DataDirectory);
+    public static LinkDownloadService Links { get; } = new(Settings, Library, DataDirectory);
     public static TrayService Tray { get; } = new();
 
     private static AppSettings LoadSettings()

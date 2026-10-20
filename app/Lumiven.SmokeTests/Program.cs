@@ -2,6 +2,11 @@ using System.Text.Json;
 using Lumiven.Models;
 using Lumiven.Services;
 
+if (args.Length == 3 && args[0] is "--douyin-live" or "--xhs-live")
+{
+    await LinkDownloadTests.LiveAsync(args[1], args[2], args[0] == "--xhs-live");
+    return;
+}
 if (args.Contains("--check-updates-live"))
 {
     using var updates = new UpdateService(Path.GetTempPath());
@@ -10,6 +15,7 @@ if (args.Contains("--check-updates-live"))
     return;
 }
 await UpdateTests.RunAsync();
+await LinkDownloadTests.RunAsync();
 
 var root = Path.Combine(Path.GetTempPath(), "lumiven-library-test-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(root);

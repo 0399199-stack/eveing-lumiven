@@ -167,7 +167,7 @@ public sealed partial class MainWindow
             };
             if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
             var tasks = await AppServices.Engine.GetTasksAsync();
-            if (tasks.Any(t => t.Status is "queued" or "pending" or "downloading" or "processing" or "saving"))
+            if (AppServices.Links.HasActiveTasks || tasks.Any(t => t.Status is "queued" or "pending" or "downloading" or "processing" or "saving"))
             {
                 ShowNotice("请稍后安装", "仍有视频任务未完成，请等待下载结束后再安装更新。", InfoBarSeverity.Warning);
                 return;

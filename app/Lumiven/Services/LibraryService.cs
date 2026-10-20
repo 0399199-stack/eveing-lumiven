@@ -66,9 +66,18 @@ public sealed class LibraryService(string dataDirectory)
             await LoadLockedAsync();
             if (IsRemoved(item.FilePath, task.UpdatedAt)) return;
             if (_items.TryGetValue(item.FilePath, out var previous)) item.Thumbnail = previous.Thumbnail;
+            var key = PathKey(item.FilePath);
+            var hadRemoval = _removed.TryGetValue(key, out var removedAt);
             _items[item.FilePath] = item;
-            _removed.Remove(PathKey(item.FilePath));
-            await SaveLockedAsync();
+            _removed.Remove(key);
+            try { await SaveLockedAsync(); }
+            catch
+            {
+                if (previous is null) _items.Remove(item.FilePath);
+                else _items[item.FilePath] = previous;
+                if (hadRemoval) _removed[key] = removedAt;
+                throw;
+            }
         }
         finally { _gate.Release(); }
     }

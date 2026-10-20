@@ -9,8 +9,23 @@ public sealed class StatusConverter : IValueConverter
     {
         "queued" => "等待下载", "downloading" => "正在下载", "uploading" => "接收视频",
         "saving" => "保存文件", "processing" => "处理中", "completed" => "已完成",
-        "failed" => "下载失败", "interrupted" => "下载中断", _ => "准备中"
+        "failed" => "下载失败", "interrupted" => "下载中断", "parsing" => "解析链接", "cancelled" => "已取消", _ => "准备中"
     };
+    public object ConvertBack(object value, Type targetType, object parameter, string language) => throw new NotSupportedException();
+}
+
+public sealed class LinkCancelVisibilityConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language) =>
+        value is string id && Lumiven.Services.LinkDownloadService.IsLinkTask(id)
+            ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
+    public object ConvertBack(object value, Type targetType, object parameter, string language) => throw new NotSupportedException();
+}
+
+public sealed class ActiveTaskConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language) =>
+        value is "queued" or "parsing" or "downloading" or "saving";
     public object ConvertBack(object value, Type targetType, object parameter, string language) => throw new NotSupportedException();
 }
 

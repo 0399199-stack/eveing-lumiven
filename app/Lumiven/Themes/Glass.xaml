@@ -102,6 +102,8 @@
     <Setter Property="FontSize" Value="13" />
   </Style>
   <controls:StatusConverter x:Key="StatusConverter" />
+  <controls:LinkCancelVisibilityConverter x:Key="LinkCancelVisibilityConverter" />
+  <controls:ActiveTaskConverter x:Key="ActiveTaskConverter" />
   <controls:FileSizeConverter x:Key="FileSizeConverter" />
   <controls:DateConverter x:Key="DateConverter" />
   <controls:ThumbnailConverter x:Key="ThumbnailConverter" />

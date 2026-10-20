@@ -49,6 +49,10 @@ public sealed class LineIcon : UserControl
         }
         switch (Kind)
         {
+            case "Link": Stroke(9, 14, 6, 17, 3, 17, 1, 15, 1, 12, 6, 7, 9, 7, 11, 9); Stroke(13, 15, 15, 17, 18, 17, 23, 12, 23, 9, 21, 7, 18, 7, 15, 10); Line(8, 16, 16, 8); break;
+            case "Douyin": Line(14, 3, 14, 16); Stroke(14, 3, 17, 6, 21, 7, 21, 10, 17, 9, 14, 7); Circle(10, 17, 4); break;
+            case "Xiaohongshu": Stroke(12, 5, 8, 3, 3, 3, 3, 19, 8, 19, 12, 21, 16, 19, 21, 19, 21, 3, 16, 3, 12, 5, 12, 21); Line(6, 8, 9, 9); Line(15, 9, 18, 8); break;
+            case "Clean": Stroke(3, 14, 12, 5, 19, 12, 10, 21, 6, 21, 3, 18, 3, 14); Line(7, 10, 14, 17); Line(10, 21, 21, 21); Line(20, 2, 20, 6); Line(18, 4, 22, 4); break;
             case "More": Circle(5, 12, 1, true); Circle(12, 12, 1, true); Circle(19, 12, 1, true); break;
             case "Select": Stroke(9, 3, 3, 3, 3, 9); Stroke(15, 3, 21, 3, 21, 9); Stroke(21, 15, 21, 21, 15, 21); Stroke(9, 21, 3, 21, 3, 15); Stroke(7, 12, 10, 15, 17, 8); break;
             case "Library": Stroke(5, 4, 19, 4, 21, 6, 21, 18, 19, 20, 5, 20, 3, 18, 3, 6, 5, 4); Play(9, 8, 8, true); break;

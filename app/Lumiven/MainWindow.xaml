@@ -5,6 +5,23 @@
     xmlns:models="using:Lumiven.Models"
     Title="EVEING Lumiven">
   <Grid x:Name="Root" Background="{ThemeResource CanvasBrush}" Loaded="Root_Loaded">
+    <Grid.Resources>
+      <DataTemplate x:Key="DownloadTaskTemplate" x:DataType="models:DownloadTask">
+        <Border Style="{StaticResource GlassPanel}" CornerRadius="20" Padding="20">
+          <Grid RowSpacing="10" ColumnSpacing="16"><Grid.ColumnDefinitions><ColumnDefinition Width="42"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+            <Border Width="42" Height="42" CornerRadius="13" Background="{ThemeResource AccentSoftBrush}"><FontIcon Glyph="&#xE714;" FontSize="19" Foreground="{ThemeResource AccentBrush}"/></Border>
+            <StackPanel Grid.Column="1" Spacing="5"><TextBlock Text="{x:Bind Title, Mode=OneWay}" TextTrimming="CharacterEllipsis" FontWeight="SemiBold" FontSize="14" Foreground="{ThemeResource PrimaryBrush}"/><StackPanel Orientation="Horizontal" Spacing="12"><TextBlock Text="{x:Bind Author, Mode=OneWay}" Style="{StaticResource MutedText}" FontSize="11"/><TextBlock Text="{x:Bind Quality, Mode=OneWay}" Style="{StaticResource MutedText}" FontSize="11"/></StackPanel></StackPanel>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+              <TextBlock Text="{Binding Status, Converter={StaticResource StatusConverter}}" Style="{StaticResource MutedText}" FontSize="11" VerticalAlignment="Center"/>
+              <Button Content="取消" Tag="{x:Bind Id}" Click="CancelLink_Click" Style="{StaticResource GlassButton}" Padding="9,4" FontSize="11"
+                  Visibility="{Binding Id, Converter={StaticResource LinkCancelVisibilityConverter}}" IsEnabled="{Binding Status, Converter={StaticResource ActiveTaskConverter}}"/>
+            </StackPanel>
+            <controls:SmoothProgressBar Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" TargetValue="{x:Bind Progress, Mode=OneWay}" TotalBytes="{x:Bind BytesTotal, Mode=OneWay}" TaskStatus="{x:Bind Status, Mode=OneWay}" Maximum="100" Height="4" CornerRadius="2"/>
+            <Grid Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2"><TextBlock Text="{x:Bind Error, Mode=OneWay}" Foreground="#C65A69" FontSize="11" TextWrapping="Wrap" MaxWidth="520" HorizontalAlignment="Left"/><TextBlock HorizontalAlignment="Right" Text="{Binding BytesReceived, Converter={StaticResource FileSizeConverter}}" Style="{StaticResource MutedText}" FontSize="11"/></Grid>
+          </Grid>
+        </Border>
+      </DataTemplate>
+    </Grid.Resources>
     <Grid x:Name="AmbientLayer" IsHitTestVisible="False" Opacity="0.65"><Image Source="Assets/Ambient.svg" Stretch="UniformToFill"/></Grid>
     <Grid RowSpacing="0" ColumnSpacing="2" Padding="16,0,16,16">
       <Grid.RowDefinitions><RowDefinition Height="58"/><RowDefinition Height="*"/></Grid.RowDefinitions>
@@ -18,17 +35,18 @@
         </StackPanel>
       </Grid>
       <Border Grid.Row="1" Background="{ThemeResource PanelShadeBrush}" CornerRadius="23" Margin="2,5,0,-3" IsHitTestVisible="False"/>
-      <Border Grid.Row="1" Background="{ThemeResource SidebarBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1.4" CornerRadius="22" Padding="10,36,10,28">
-        <Grid RowSpacing="34">
+      <Border Grid.Row="1" Background="{ThemeResource SidebarBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1.4" CornerRadius="22" Padding="10,28,10,24">
+        <Grid RowSpacing="26">
           <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
           <Border Grid.RowSpan="3" BorderBrush="{ThemeResource HighlightBrush}" BorderThickness="1" CornerRadius="18" Margin="-6,-30,-6,-22" IsHitTestVisible="False"/>
           <StackPanel Spacing="10" HorizontalAlignment="Center">
-            <Image Source="Assets/Logo.svg" Width="96" Height="96" HorizontalAlignment="Center" />
+            <Image Source="Assets/Logo.svg" Width="82" Height="82" HorizontalAlignment="Center" />
             <TextBlock Text="Lumiven" FontFamily="Segoe UI Variable Display" FontSize="28" FontWeight="SemiBold" Foreground="{ThemeResource PrimaryBrush}" HorizontalAlignment="Center" />
             <TextBlock Text="EVEING" FontSize="10" CharacterSpacing="260" Foreground="{ThemeResource MutedBrush}" HorizontalAlignment="Center" />
           </StackPanel>
           <StackPanel Grid.Row="1" Spacing="6">
-            <Grid><Button x:Name="DownloadsNav" Style="{StaticResource NavButton}" Tag="downloads" Click="Navigate_Click" AutomationProperties.Name="下载中"><StackPanel Orientation="Horizontal" Spacing="15"><controls:LineIcon Kind="Download" Foreground="{Binding Foreground, ElementName=DownloadsNav}"/><TextBlock Text="下载中" VerticalAlignment="Center"/></StackPanel></Button><Border x:Name="DownloadsIndicator" Width="3" Height="24" CornerRadius="2" Background="{ThemeResource AccentBrush}" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="2,0,0,0" IsHitTestVisible="False" Visibility="Collapsed"/></Grid>
+            <Grid><Button x:Name="DownloadsNav" Style="{StaticResource NavButton}" Tag="downloads" Click="Navigate_Click" AutomationProperties.Name="视频号下载"><StackPanel Orientation="Horizontal" Spacing="15"><controls:LineIcon Kind="Download" Foreground="{Binding Foreground, ElementName=DownloadsNav}"/><TextBlock Text="视频号下载" VerticalAlignment="Center"/></StackPanel></Button><Border x:Name="DownloadsIndicator" Width="3" Height="24" CornerRadius="2" Background="{ThemeResource AccentBrush}" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="2,0,0,0" IsHitTestVisible="False" Visibility="Collapsed"/></Grid>
+            <Grid><Button x:Name="ParsingNav" Style="{StaticResource NavButton}" Tag="parsing" Click="Navigate_Click" AutomationProperties.Name="视频解析"><StackPanel Orientation="Horizontal" Spacing="15"><controls:LineIcon Kind="Link" Foreground="{Binding Foreground, ElementName=ParsingNav}"/><TextBlock Text="视频解析" VerticalAlignment="Center"/></StackPanel></Button><Border x:Name="ParsingIndicator" Width="3" Height="24" CornerRadius="2" Background="{ThemeResource AccentBrush}" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="2,0,0,0" IsHitTestVisible="False" Visibility="Collapsed"/></Grid>
             <Grid><Button x:Name="LibraryNav" Style="{StaticResource NavButton}" Tag="library" Click="Navigate_Click" AutomationProperties.Name="已下载"><StackPanel Orientation="Horizontal" Spacing="15"><controls:LineIcon Kind="Library" Foreground="{Binding Foreground, ElementName=LibraryNav}"/><TextBlock Text="已下载" VerticalAlignment="Center"/></StackPanel></Button><Border x:Name="LibraryIndicator" Width="3" Height="24" CornerRadius="2" Background="{ThemeResource AccentBrush}" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="2,0,0,0" IsHitTestVisible="False" Visibility="Collapsed"/></Grid>
             <Grid><Button x:Name="SettingsNav" Style="{StaticResource NavButton}" Tag="settings" Click="Navigate_Click" AutomationProperties.Name="设置"><StackPanel Orientation="Horizontal" Spacing="15"><controls:LineIcon Kind="Settings" Foreground="{Binding Foreground, ElementName=SettingsNav}"/><TextBlock Text="设置" VerticalAlignment="Center"/></StackPanel></Button><Border x:Name="SettingsIndicator" Width="3" Height="24" CornerRadius="2" Background="{ThemeResource AccentBrush}" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="2,0,0,0" IsHitTestVisible="False" Visibility="Collapsed"/></Grid>
             <Grid><Button x:Name="AboutNav" Style="{StaticResource NavButton}" Tag="about" Click="Navigate_Click" AutomationProperties.Name="关于"><StackPanel Orientation="Horizontal" Spacing="15"><controls:LineIcon Kind="About" Foreground="{Binding Foreground, ElementName=AboutNav}"/><TextBlock Text="关于" VerticalAlignment="Center"/></StackPanel></Button><Border x:Name="AboutIndicator" Width="3" Height="24" CornerRadius="2" Background="{ThemeResource AccentBrush}" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="2,0,0,0" IsHitTestVisible="False" Visibility="Collapsed"/></Grid>
@@ -44,7 +62,7 @@
       <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource GlassPanel}" CornerRadius="22" Padding="32,26,24,24"><Grid>
         <Grid x:Name="DownloadsPage" RowSpacing="22">
           <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-          <StackPanel Spacing="8" Margin="2,4,0,0"><TextBlock Text="下载中" Style="{StaticResource PageTitle}"/><TextBlock Text="微信里点击下载，Lumiven 为你接住每一份灵感。" Style="{StaticResource MutedText}"/></StackPanel>
+          <StackPanel Spacing="8" Margin="2,4,0,0"><TextBlock Text="视频号下载" Style="{StaticResource PageTitle}"/><TextBlock Text="连接微信，在视频号中点击下载，文件自动收录。" Style="{StaticResource MutedText}"/></StackPanel>
           <Border Grid.Row="1" CornerRadius="26" Background="{ThemeResource PanelShadeBrush}" Margin="2,6,2,-6"/>
           <Border Grid.Row="1" Style="{StaticResource GlassPanel}" Padding="28">
             <Grid ColumnSpacing="22">
@@ -71,27 +89,53 @@
           </Border>
           <Grid Grid.Row="2"><TextBlock x:Name="QueueCount" Text="下载任务 · 0" FontSize="15" FontWeight="SemiBold" Foreground="{ThemeResource PrimaryBrush}"/><Button HorizontalAlignment="Right" Style="{StaticResource GlassButton}" Padding="12,6" Click="Refresh_Click" Content="刷新"/></Grid>
           <Grid Grid.Row="3">
-            <ListView x:Name="TaskList" ItemsSource="{x:Bind Tasks}" SelectionMode="None" Background="Transparent" Padding="0,0,0,6" HorizontalContentAlignment="Stretch" ContainerContentChanging="TaskList_ContainerContentChanging">
+            <ListView ItemTemplate="{StaticResource DownloadTaskTemplate}" x:Name="TaskList" ItemsSource="{x:Bind Tasks}" SelectionMode="None" Background="Transparent" Padding="0,0,0,6" HorizontalContentAlignment="Stretch" ContainerContentChanging="TaskList_ContainerContentChanging">
               <ListView.ItemContainerStyle><Style TargetType="ListViewItem"><Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Margin" Value="0,0,0,10"/><Setter Property="Padding" Value="0"/><Setter Property="CornerRadius" Value="20"/></Style></ListView.ItemContainerStyle>
-              <ListView.ItemTemplate>
-                <DataTemplate x:DataType="models:DownloadTask">
-                  <Border Style="{StaticResource GlassPanel}" CornerRadius="20" Padding="20">
-                    <Grid RowSpacing="10" ColumnSpacing="16"><Grid.ColumnDefinitions><ColumnDefinition Width="42"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                      <Border Width="42" Height="42" CornerRadius="13" Background="{ThemeResource AccentSoftBrush}"><FontIcon Glyph="&#xE714;" FontSize="19" Foreground="{ThemeResource AccentBrush}"/></Border>
-                      <StackPanel Grid.Column="1" Spacing="5"><TextBlock Text="{x:Bind Title, Mode=OneWay}" TextTrimming="CharacterEllipsis" FontWeight="SemiBold" FontSize="14" Foreground="{ThemeResource PrimaryBrush}"/><StackPanel Orientation="Horizontal" Spacing="12"><TextBlock Text="{x:Bind Author, Mode=OneWay}" Style="{StaticResource MutedText}" FontSize="11"/><TextBlock Text="{x:Bind Quality, Mode=OneWay}" Style="{StaticResource MutedText}" FontSize="11"/></StackPanel></StackPanel>
-                      <TextBlock Grid.Column="2" Text="{Binding Status, Converter={StaticResource StatusConverter}}" Style="{StaticResource MutedText}" FontSize="11"/>
-                      <controls:SmoothProgressBar Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" TargetValue="{x:Bind Progress, Mode=OneWay}" TotalBytes="{x:Bind BytesTotal, Mode=OneWay}" TaskStatus="{x:Bind Status, Mode=OneWay}" Maximum="100" Height="4" CornerRadius="2"/>
-                      <Grid Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2"><TextBlock Text="{x:Bind Error, Mode=OneWay}" Foreground="#C65A69" FontSize="11" TextWrapping="Wrap" MaxWidth="520" HorizontalAlignment="Left"/><TextBlock HorizontalAlignment="Right" Text="{Binding BytesReceived, Converter={StaticResource FileSizeConverter}}" Style="{StaticResource MutedText}" FontSize="11"/></Grid>
-                    </Grid>
-                  </Border>
-                </DataTemplate>
-              </ListView.ItemTemplate>
+
             </ListView>
             <StackPanel x:Name="QueueEmpty" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12" Margin="0,20">
               <FontIcon Glyph="&#xE896;" FontSize="34" Foreground="{ThemeResource MutedBrush}" Opacity="0.4"/>
               <TextBlock Text="还没有下载任务" FontSize="15" Foreground="{ThemeResource PrimaryBrush}" HorizontalAlignment="Center"/>
-              <TextBlock Text="启用接入 → 打开微信视频号 → 点击下载" Style="{StaticResource MutedText}" FontSize="12" HorizontalAlignment="Center"/>
+              <TextBlock Text="启用微信下载 → 打开视频号 → 点击下载" Style="{StaticResource MutedText}" FontSize="12" HorizontalAlignment="Center"/>
             </StackPanel>
+          </Grid>
+        </Grid>
+        <Grid x:Name="ParsingPage" Visibility="Collapsed" RowSpacing="20">
+          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+          <StackPanel Spacing="8" Margin="2,4,0,0"><TextBlock Text="视频解析" Style="{StaticResource PageTitle}"/><TextBlock Text="选择平台，粘贴分享链接，保存你喜欢的视频。" Style="{StaticResource MutedText}"/></StackPanel>
+          <Grid Grid.Row="1" ColumnSpacing="14"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Button x:Name="DouyinPlatformButton" Tag="douyin" Click="Platform_Click" Style="{StaticResource GlassButton}" Padding="20" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.Name="抖音下载">
+              <Grid ColumnSpacing="14"><Grid.ColumnDefinitions><ColumnDefinition Width="48"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                <Border Width="48" Height="48" CornerRadius="15" Background="{ThemeResource AccentSoftBrush}"><controls:LineIcon Kind="Douyin" Width="25" Height="25" Foreground="{ThemeResource AccentBrush}"/></Border>
+                <StackPanel Grid.Column="1" Spacing="6"><TextBlock Text="抖音下载" FontSize="17" FontWeight="SemiBold" Foreground="{ThemeResource PrimaryBrush}"/><TextBlock Text="支持短链接与整段分享文案" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap"/>
+                  <StackPanel Orientation="Horizontal" Spacing="5" Margin="0,3,0,0"><controls:LineIcon Kind="Clean" Width="14" Height="14" Foreground="{ThemeResource AccentBrush}"/><TextBlock Text="优先无水印源" FontSize="11" Foreground="{ThemeResource AccentBrush}"/></StackPanel>
+                </StackPanel>
+              </Grid>
+            </Button>
+            <Button x:Name="XhsPlatformButton" Grid.Column="1" Tag="xhs" Click="Platform_Click" Style="{StaticResource GlassButton}" Padding="20" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.Name="小红书解析">
+              <Grid ColumnSpacing="14"><Grid.ColumnDefinitions><ColumnDefinition Width="48"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                <Border Width="48" Height="48" CornerRadius="15" Background="{ThemeResource AccentSoftBrush}"><controls:LineIcon Kind="Xiaohongshu" Width="25" Height="25" Foreground="{ThemeResource AccentBrush}"/></Border>
+                <StackPanel Grid.Column="1" Spacing="6"><TextBlock Text="小红书解析" FontSize="17" FontWeight="SemiBold" Foreground="{ThemeResource PrimaryBrush}"/><TextBlock Text="支持视频笔记与分享短链接" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap"/>
+                  <StackPanel Orientation="Horizontal" Spacing="5" Margin="0,3,0,0"><controls:LineIcon Kind="Clean" Width="14" Height="14" Foreground="{ThemeResource AccentBrush}"/><TextBlock Text="优先无水印源" FontSize="11" Foreground="{ThemeResource AccentBrush}"/></StackPanel>
+                </StackPanel>
+              </Grid>
+            </Button>
+          </Grid>
+          <Border Grid.Row="2" Style="{StaticResource GlassPanel}" Padding="20" CornerRadius="20">
+            <Grid RowSpacing="12"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+              <Grid><TextBlock x:Name="LinkInputTitle" Text="抖音分享链接" FontSize="14" FontWeight="SemiBold" Foreground="{ThemeResource PrimaryBrush}"/><Button HorizontalAlignment="Right" Click="PasteLink_Click" Style="{StaticResource GlassButton}" Padding="10,4" FontSize="12" Content="粘贴"/></Grid>
+              <TextBox x:Name="LinkInput" Grid.Row="1" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="78" MaxHeight="130" MaxLength="8000" PlaceholderText="粘贴 https://v.douyin.com/… 或整段分享文案" AutomationProperties.Name="视频分享链接"/>
+              <Grid Grid.Row="2" ColumnSpacing="16"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <TextBlock Text="直接保存平台视频源，不抹除画面中已有的水印。" Style="{StaticResource MutedText}" FontSize="11" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                <Button x:Name="LinkDownloadButton" Grid.Column="1" Click="LinkDownload_Click" Style="{StaticResource IceAccentButton}"><StackPanel Orientation="Horizontal" Spacing="8"><controls:LineIcon Kind="Download" Width="17" Height="17" Foreground="White"/><TextBlock Text="解析并下载"/></StackPanel></Button>
+              </Grid>
+              <TextBlock x:Name="LinkInputError" Grid.Row="3" Visibility="Collapsed" FontSize="12" Foreground="#C65A69" TextWrapping="Wrap"/>
+            </Grid>
+          </Border>
+          <Grid Grid.Row="3"><TextBlock x:Name="LinkQueueCount" Text="解析下载任务 · 0" FontSize="15" FontWeight="SemiBold" Foreground="{ThemeResource PrimaryBrush}"/><Button HorizontalAlignment="Right" Click="Refresh_Click" Style="{StaticResource GlassButton}" Padding="12,6" Content="刷新"/></Grid>
+          <Grid Grid.Row="4">
+            <ListView x:Name="LinkTaskList" ItemsSource="{x:Bind LinkTasks}" ItemTemplate="{StaticResource DownloadTaskTemplate}" ItemContainerStyle="{Binding ItemContainerStyle, ElementName=TaskList}" SelectionMode="None" Background="Transparent" HorizontalContentAlignment="Stretch" ContainerContentChanging="TaskList_ContainerContentChanging"/>
+            <StackPanel x:Name="LinkQueueEmpty" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10" Margin="0,12"><controls:LineIcon Kind="Link" Width="30" Height="30" Foreground="{ThemeResource MutedBrush}" Opacity="0.5"/><TextBlock Text="从一条分享链接开始" FontSize="14" Foreground="{ThemeResource PrimaryBrush}" HorizontalAlignment="Center"/><TextBlock Text="下载完成后，在“已下载”中播放或定位文件" Style="{StaticResource MutedText}" FontSize="12"/></StackPanel>
           </Grid>
         </Grid>
         <ContentControl x:Name="LibraryPage" Visibility="Collapsed" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" IsTabStop="False"><Grid RowSpacing="20">

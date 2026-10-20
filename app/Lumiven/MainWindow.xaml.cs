@@ -24,6 +24,7 @@ public sealed partial class MainWindow : Window
 {
     public string DisplayVersion => "V" + UpdateService.CurrentVersion.ToString(UpdateService.CurrentVersion.Build == 0 ? 2 : 3) + "  ·  免费开源";
     public ObservableCollection<DownloadTask> Tasks { get; } = [];
+    public ObservableCollection<DownloadTask> LinkTasks { get; } = [];
     public ObservableCollection<MediaItem> FilteredMedia { get; private set; } = [];
     private readonly List<MediaItem> _media = [];
     private readonly Dictionary<string, DownloadTask> _pendingTasks = [];
@@ -90,6 +91,7 @@ public sealed partial class MainWindow : Window
         _uiSettings.AdvancedEffectsEnabledChanged += (_, _) => DispatcherQueue.TryEnqueue(UpdateEffects);
         AppServices.Engine.StatusChanged += (_, status) => DispatcherQueue.TryEnqueue(() => SetStatus(status));
         AppServices.Engine.TaskUpdated += (_, task) => DispatcherQueue.TryEnqueue(() => _pendingTasks[task.Id] = task);
+        AppServices.Links.TaskUpdated += (_, task) => DispatcherQueue.TryEnqueue(() => _pendingTasks[task.Id] = task);
         AppServices.Tray.Initialize(_hwnd, () => DispatcherQueue.TryEnqueue(ShowWindow), () => DispatcherQueue.TryEnqueue(async () => await ExitAsync()));
     }
 
@@ -110,10 +112,11 @@ public sealed partial class MainWindow : Window
         await GuardAsync(async () =>
         {
             await AppServices.Engine.InitializeAsync();
+            await AppServices.Links.InitializeAsync();
             SetStatus(AppServices.Engine.StatusText);
-            foreach (var task in await AppServices.Engine.GetTasksAsync())
+            foreach (var task in (await AppServices.Engine.GetTasksAsync()).Concat(AppServices.Links.GetTasks()).OrderByDescending(t => t.CreatedAt))
             {
-                if (task.Status != "completed") Tasks.Add(task);
+                if (task.Status != "completed") (LinkDownloadService.IsLinkTask(task.Id) ? LinkTasks : Tasks).Add(task);
                 else _completedIds.Add(task.Id);
             }
             UpdateQueueCount();
@@ -145,6 +148,7 @@ public sealed partial class MainWindow : Window
             _window.TitleBar.ButtonInactiveForegroundColor = Root.ActualTheme == ElementTheme.Dark ? Colors.Gray : Colors.DarkGray;
         }
         SelectNavigation();
+        UpdatePlatformSelection();
     }
 
     private static bool DesktopAcrylicControllerSupported() => Microsoft.UI.Composition.SystemBackdrops.DesktopAcrylicController.IsSupported();
@@ -174,7 +178,7 @@ public sealed partial class MainWindow : Window
         foreach (var progress in Descendants<SmoothProgressBar>(_page)) progress.Suspend();
         _page.Visibility = Visibility.Collapsed;
         _pageName = next;
-        _page = next switch { "library" => LibraryPage, "settings" => SettingsPage, "about" => AboutPage, _ => DownloadsPage };
+        _page = next switch { "parsing" => ParsingPage, "library" => LibraryPage, "settings" => SettingsPage, "about" => AboutPage, _ => DownloadsPage };
         _page.Visibility = Visibility.Visible;
         SelectNavigation();
         foreach (var progress in Descendants<SmoothProgressBar>(_page)) progress.Resume();
@@ -185,7 +189,7 @@ public sealed partial class MainWindow : Window
     {
         foreach (var (button, indicator) in new[]
         {
-            (DownloadsNav, DownloadsIndicator), (LibraryNav, LibraryIndicator),
+            (DownloadsNav, DownloadsIndicator), (ParsingNav, ParsingIndicator), (LibraryNav, LibraryIndicator),
             (SettingsNav, SettingsIndicator), (AboutNav, AboutIndicator)
         })
         {
@@ -248,14 +252,15 @@ public sealed partial class MainWindow : Window
         bool completed = false;
         foreach (var update in _pendingTasks.Values)
         {
-            var existing = Tasks.FirstOrDefault(t => t.Id == update.Id);
+            var targetTasks = LinkDownloadService.IsLinkTask(update.Id) ? LinkTasks : Tasks;
+            var existing = targetTasks.FirstOrDefault(t => t.Id == update.Id);
             if (update.Status == "completed")
             {
-                if (existing is not null) Tasks.Remove(existing);
+                if (existing is not null) targetTasks.Remove(existing);
                 completed |= _completedIds.Add(update.Id);
                 continue;
             }
-            if (existing is null) Tasks.Insert(0, update);
+            if (existing is null) targetTasks.Insert(0, update);
             else if (!ReferenceEquals(existing, update))
             {
                 existing.Title = update.Title; existing.Author = update.Author; existing.Quality = update.Quality;
@@ -278,12 +283,15 @@ public sealed partial class MainWindow : Window
     {
         QueueCount.Text = $"下载任务 · {Tasks.Count}";
         QueueEmpty.Visibility = Tasks.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        LinkQueueCount.Text = $"解析下载任务 · {LinkTasks.Count}";
+        LinkQueueEmpty.Visibility = LinkTasks.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private async void Refresh_Click(object sender, RoutedEventArgs e) => await GuardAsync(async () =>
     {
         if (_performanceTest) { FilterLibrary(); return; }
         foreach (var task in await AppServices.Engine.GetTasksAsync()) _pendingTasks[task.Id] = task;
+        foreach (var task in AppServices.Links.GetTasks()) _pendingTasks[task.Id] = task;
         FlushTaskUpdates();
         await ReloadLibraryAsync();
     });
@@ -680,15 +688,17 @@ public sealed partial class MainWindow : Window
     {
         if (_exiting) return;
         _exiting = true;
+        LinkDownloadButton.IsEnabled = false;
         if (!_performanceTest)
         {
             ShowWindow();
             EnableButton.IsEnabled = false; StopButton.IsEnabled = false;
             EngineStatusText.Text = "正在停止接入并恢复代理…";
-            try { await AppServices.Engine.StopAsync(); }
+            try { await AppServices.Engine.StopAsync(); await AppServices.Links.StopAsync(); }
             catch (Exception ex)
             {
                 _exiting = false;
+                LinkDownloadButton.IsEnabled = true;
                 AppServices.Log("退出时停止接入", ex);
                 ShowNotice("暂时无法退出", "停止接入或恢复原代理尚未完成。请在设置中重试停止接入，并查看本地日志。", InfoBarSeverity.Error);
                 SetStatus(AppServices.Engine.StatusText);
@@ -708,6 +718,7 @@ public sealed partial class MainWindow : Window
             catch (Exception ex)
             {
                 _exiting = false;
+                LinkDownloadButton.IsEnabled = true;
                 AppServices.Log("启动更新安装", ex);
                 ShowNotice("无法安装更新", "接入已停止。请重新下载更新后再试。", InfoBarSeverity.Error);
                 SetStatus(AppServices.Engine.StatusText);
