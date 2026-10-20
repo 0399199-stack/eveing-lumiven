@@ -37,6 +37,10 @@ internal static class LinkDownloadTests
         Check(XiaohongshuLink.ParsePage(xhsPage.Replace("\"type\":\"video\"", "\"type\":\"normal\""), xhsId) is null, "XHS image note rejected");
         Check(!VideoLinkHttp.Allowed(new Uri("https://xhscdn.com.evil.test/video.mp4"), true, true), "XHS CDN suffix spoof rejected");
         Check(DouyinShortLink.Extract("复制打开抖音 " + Short + " 看视频").AbsoluteUri == Short, "Share text extraction");
+        Check(DouyinShortLink.Extract("视频链接：" + Short).AbsoluteUri == Short, "Chinese share prefix extraction");
+        Check(DouyinShortLink.Extract("确认" + Short).AbsoluteUri == Short, "Adjacent Chinese share text extraction");
+        using (var client = new HttpClient(new Fixture("transient-details")))
+            Check((await DouyinShortLink.ResolveAsync(client, new Uri(Short), CancellationToken.None)).Id == Id, "Missing details recover on bounded retry");
         foreach (var input in new[] { "https://v.douyin.com.evil.test/abc", "https://v.douyin.com@evil.test/abc",
             "https://example.com/https://v.douyin.com/abc/", "https://v.douyin.com/abc/../../private", "https://www.douyin.com/video/" + Id })
         {
@@ -144,6 +148,7 @@ internal static class LinkDownloadTests
 
     private sealed class Fixture(string mode) : HttpMessageHandler
     {
+        private int _pageRequests;
         public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
         {
@@ -158,7 +163,7 @@ internal static class LinkDownloadTests
             }
             if (uri.Host == "www.iesdouyin.com")
                 return new HttpResponseMessage(HttpStatusCode.OK) { RequestMessage = request,
-                    Content = new StringContent(mode == "no-details" ? "<html>No details</html>" : Page()) };
+                    Content = new StringContent(mode == "no-details" || (mode == "transient-details" && ++_pageRequests < 3) ? "<html>No details</html>" : Page()) };
             var content = new ByteArrayContent(mode == "html" ? "<html>Not a video</html>"u8.ToArray() : Mp4);
             if (mode == "truncated") content.Headers.ContentLength = Mp4.Length + 100;
             return new HttpResponseMessage(HttpStatusCode.OK) { RequestMessage = request, Content = content };

@@ -15,7 +15,7 @@ public static class DouyinShortLink
 
     public static Uri Extract(string text)
     {
-        var match = Regex.Match(text, @"(?<![\w./@-])https://v\.douyin\.com/[A-Za-z0-9]+/?(?=$|[\s，。！；：、）】!?])",
+        var match = Regex.Match(text, @"(?<![A-Za-z0-9_./@-])https://v\.douyin\.com/[A-Za-z0-9]+/?(?=$|[\s，。！；：、）】!?])",
             RegexOptions.IgnoreCase, TimeSpan.FromSeconds(1));
         if (!match.Success) throw new InvalidDataException("请粘贴抖音 App 的视频分享短链接（https://v.douyin.com/…），或包含它的整段文案。");
         return new Uri(match.Value);
@@ -32,8 +32,14 @@ public static class DouyinShortLink
         var video = ParsePage(html, id);
         if (video is not null) return video;
         // The canonical mobile page can return details omitted from the tracking redirect.
-        using var page = await VideoLinkHttp.GetAsync(http, new Uri($"https://www.iesdouyin.com/share/video/{id}"), false, token);
-        return ParsePage(await VideoLinkHttp.ReadPageAsync(page, token), id) ?? throw new InvalidDataException(NoVideo);
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            if (attempt > 0) await Task.Delay(TimeSpan.FromSeconds(1), token);
+            using var page = await VideoLinkHttp.GetAsync(http, new Uri($"https://www.iesdouyin.com/share/video/{id}"), false, token);
+            video = ParsePage(await VideoLinkHttp.ReadPageAsync(page, token), id);
+            if (video is not null) return video;
+        }
+        throw new InvalidDataException(NoVideo);
     }
 
     internal static LinkVideo? ParsePage(string html, string expectedId)
