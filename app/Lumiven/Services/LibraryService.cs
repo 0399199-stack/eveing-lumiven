@@ -88,21 +88,34 @@ public sealed class LibraryService(string dataDirectory)
         try
         {
             await LoadLockedAsync();
-            foreach (var task in tasks)
+            var previousItems = new Dictionary<string, MediaItem>(_items, StringComparer.OrdinalIgnoreCase);
+            var previousRemovals = new Dictionary<string, DateTimeOffset>(_removed);
+            try
             {
-                if (task.Status != "completed" || string.IsNullOrWhiteSpace(task.FilePath)) continue;
-                var path = Path.GetFullPath(task.FilePath);
-                if (IsRemoved(path, task.UpdatedAt)) continue;
-                _items.TryGetValue(path, out var previous);
-                _items[path] = new MediaItem
+                foreach (var task in tasks)
                 {
-                    Id = task.Id, Title = task.Title, Author = task.Author, Quality = task.Quality, FilePath = path,
-                    SizeBytes = task.BytesTotal > 0 ? task.BytesTotal : task.BytesReceived, CompletedAt = task.UpdatedAt,
-                    Thumbnail = previous?.Thumbnail ?? ""
-                };
-                _removed.Remove(PathKey(path));
+                    if (task.Status != "completed" || string.IsNullOrWhiteSpace(task.FilePath)) continue;
+                    var path = Path.GetFullPath(task.FilePath);
+                    if (IsRemoved(path, task.UpdatedAt)) continue;
+                    _items.TryGetValue(path, out var previous);
+                    _items[path] = new MediaItem
+                    {
+                        Id = task.Id, Title = task.Title, Author = task.Author, Quality = task.Quality, FilePath = path,
+                        SizeBytes = task.BytesTotal > 0 ? task.BytesTotal : task.BytesReceived, CompletedAt = task.UpdatedAt,
+                        Thumbnail = previous?.Thumbnail ?? ""
+                    };
+                    _removed.Remove(PathKey(path));
+                }
+                await SaveLockedAsync();
             }
-            await SaveLockedAsync();
+            catch
+            {
+                _items.Clear();
+                foreach (var item in previousItems) _items.Add(item.Key, item.Value);
+                _removed.Clear();
+                foreach (var removal in previousRemovals) _removed.Add(removal.Key, removal.Value);
+                throw;
+            }
         }
         finally { _gate.Release(); }
     }
@@ -139,9 +152,19 @@ public sealed class LibraryService(string dataDirectory)
         try
         {
             await LoadLockedAsync();
+            var added = new List<string>();
             foreach (var item in discovered)
-                if (!_removed.ContainsKey(PathKey(item.FilePath)) && !_items.ContainsKey(item.FilePath)) _items[item.FilePath] = item;
-            await SaveLockedAsync();
+                if (!_removed.ContainsKey(PathKey(item.FilePath)) && !_items.ContainsKey(item.FilePath))
+                {
+                    _items[item.FilePath] = item;
+                    added.Add(item.FilePath);
+                }
+            try { await SaveLockedAsync(); }
+            catch
+            {
+                foreach (string path in added) _items.Remove(path);
+                throw;
+            }
             return discovered.Where(x => _items.ContainsKey(x.FilePath)).Select(x => _items[x.FilePath]).OrderByDescending(x => x.CompletedAt).ToList();
         }
         finally { _gate.Release(); }
@@ -276,7 +299,8 @@ public sealed class LibraryService(string dataDirectory)
         var start = new ProcessStartInfo("explorer.exe") { UseShellExecute = false };
         if (File.Exists(item.FilePath))
         {
-            start.Arguments = "/select,\"" + item.FilePath + "\"";
+            ShellFileLocator.ShowFile(item.FilePath);
+            return;
         }
         else
         {

@@ -11,27 +11,33 @@ public static class XiaohongshuLink
 
     public static Uri Extract(string text)
     {
-        var match = Regex.Match(text, @"(?<![\w./@-])https://(?:xhslink\.(?:cn|com)|(?:www\.)?xiaohongshu\.com)/[^\s<>""'，。！；：、）】]+", RegexOptions.IgnoreCase, TimeSpan.FromSeconds(1));
+        var match = Regex.Match(text, @"(?<![A-Za-z0-9_./@-])https://(?:xhslink\.(?:cn|com)|(?:www\.)?xiaohongshu\.com)/[A-Za-z0-9\-._~:/?#\[\]@!$&()*+,;=%]+", RegexOptions.IgnoreCase, TimeSpan.FromSeconds(1));
         if (!match.Success) throw new InvalidDataException(Localizer.T("请粘贴小红书视频笔记的完整分享链接，或包含链接的整段文案。"));
         var uri = new Uri(match.Value.TrimEnd(')', '.', ',', ';', '!'));
         if (!VideoLinkHttp.Allowed(uri, false, true)) throw new InvalidDataException(Localizer.T("不支持这个小红书链接。"));
         return uri;
     }
 
-    public static async Task<LinkVideo> ResolveAsync(HttpClient http, Uri link, CancellationToken token)
+    public static async Task<LinkVideo> ResolveAsync(HttpClient http, Uri link, CancellationToken token) =>
+        (await ResolveCandidatesAsync(http, link, token))[0];
+
+    internal static async Task<IReadOnlyList<LinkVideo>> ResolveCandidatesAsync(HttpClient http, Uri link, CancellationToken token)
     {
         using var page = await VideoLinkHttp.GetAsync(http, link, false, token, true);
         var path = page.RequestMessage?.RequestUri?.AbsolutePath ?? "";
         var match = Regex.Match(path, @"^/(?:explore|discovery/item)/([0-9a-f]{24})/?$", RegexOptions.IgnoreCase, TimeSpan.FromSeconds(1));
         if (!match.Success) throw new InvalidDataException(Localizer.T("未找到小红书视频笔记，请复制 App 中的完整分享链接。"));
-        return ParsePage(await VideoLinkHttp.ReadPageAsync(page, token), match.Groups[1].Value)
-            ?? throw new InvalidDataException(Localizer.T("小红书暂未返回可下载的视频。请确认是视频笔记，并重新复制完整分享链接后重试。"));
+        var videos = ParsePageCandidates(await VideoLinkHttp.ReadPageAsync(page, token), match.Groups[1].Value);
+        return videos.Count > 0 ? videos
+            : throw new InvalidDataException(Localizer.T("小红书暂未返回可下载的视频。请确认是视频笔记，并重新复制完整分享链接后重试。"));
     }
 
-    internal static LinkVideo? ParsePage(string html, string expectedId)
+    internal static LinkVideo? ParsePage(string html, string expectedId) => ParsePageCandidates(html, expectedId).FirstOrDefault();
+
+    internal static IReadOnlyList<LinkVideo> ParsePageCandidates(string html, string expectedId)
     {
         var marker = Regex.Match(html, @"window\.__INITIAL_STATE__\s*=\s*", RegexOptions.None, TimeSpan.FromSeconds(1));
-        if (!marker.Success) return null;
+        if (!marker.Success) return [];
         var raw = html[(marker.Index + marker.Length)..];
         var end = raw.IndexOf("</script>", StringComparison.OrdinalIgnoreCase);
         if (end >= 0) raw = raw[..end];
@@ -44,7 +50,7 @@ public static class XiaohongshuLink
             using var json = JsonDocument.ParseValue(ref reader);
             var note = Get(json.RootElement, "note", "noteDetailMap", expectedId, "note");
             if (note.ValueKind != JsonValueKind.Object) note = Get(json.RootElement, "noteData", "data", "noteData");
-            if (Str(note, "noteId") != expectedId || Str(note, "type") != "video") return null;
+            if (Str(note, "noteId") != expectedId || Str(note, "type") != "video") return [];
             var streams = Get(note, "video", "media", "stream");
             var candidates = streams.ValueKind == JsonValueKind.Object ? streams.EnumerateObject()
                 .Where(p => p.Value.ValueKind == JsonValueKind.Array).SelectMany(p => p.Value.EnumerateArray()).ToList() : [];
@@ -59,19 +65,22 @@ public static class XiaohongshuLink
                 if (backups.ValueKind == JsonValueKind.Array)
                     urls.AddRange(backups.EnumerateArray().Where(v => v.ValueKind == JsonValueKind.String).Select(v => (v.GetString()!, quality)));
             }
+            var videos = new List<LinkVideo>();
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var title = Str(note, "title");
+            var author = Str(note, "user", "nickname");
+            if (author.Length == 0) author = Str(note, "user", "nickName");
             foreach (var (value, quality) in urls)
             {
                 if (!Uri.TryCreate(value, UriKind.Absolute, out var url)) continue;
                 if (url.Scheme == "http" && url.IsDefaultPort) url = new UriBuilder(url) { Scheme = "https", Port = -1 }.Uri;
-                if (!VideoLinkHttp.Allowed(url, true, true)) continue;
-                var title = Str(note, "title");
-                var author = Str(note, "user", "nickname");
-                if (author.Length == 0) author = Str(note, "user", "nickName");
-                return new(expectedId, title.Length == 0 ? Localizer.T("小红书视频") : title, author, quality, url);
+                if (!VideoLinkHttp.Allowed(url, true, true) || !seen.Add(url.AbsoluteUri)) continue;
+                videos.Add(new(expectedId, title.Length == 0 ? Localizer.T("小红书视频") : title, author, quality, url));
             }
+            return videos;
         }
         catch (JsonException) { }
-        return null;
+        return [];
     }
 
     private static JsonElement Get(JsonElement item, params string[] path)

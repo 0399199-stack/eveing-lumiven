@@ -2,6 +2,11 @@ using System.Text.Json;
 using Lumiven.Models;
 using Lumiven.Services;
 
+if (args.Contains("--xhs-regression-only"))
+{
+    await XiaohongshuRegressionTests.RunAsync();
+    return;
+}
 if (args.Length == 3 && args[0] is "--douyin-live" or "--xhs-live")
 {
     await LinkDownloadTests.LiveAsync(args[1], args[2], args[0] == "--xhs-live");
@@ -14,10 +19,16 @@ if (args.Contains("--check-updates-live"))
     Console.WriteLine(JsonSerializer.Serialize(new { githubReachable = true, availableVersion = update?.Version.ToString(), downloaded = false }));
     return;
 }
+await LibraryRefreshTests.RunAsync();
+if (args.Contains("--library-refresh-only")) return;
+await ShellFileLocatorTests.RunAsync();
+if (args.Contains("--shell-locator-only")) return;
 await LocalizationTests.RunAsync();
 if (args.Contains("--localization-only")) return;
 await EngineRepairTests.RunAsync();
 await UpdateTests.RunAsync();
+await XiaohongshuRegressionTests.RunAsync();
+await PersistenceRegressionTests.RunAsync();
 await LinkDownloadTests.RunAsync();
 
 var root = Path.Combine(Path.GetTempPath(), "lumiven-library-test-" + Guid.NewGuid().ToString("N"));

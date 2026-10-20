@@ -39,10 +39,14 @@ internal static class LinkDownloadTests
         Check(DouyinShortLink.Extract("复制打开抖音 " + Short + " 看视频").AbsoluteUri == Short, "Share text extraction");
         Check(DouyinShortLink.Extract("视频链接：" + Short).AbsoluteUri == Short, "Chinese share prefix extraction");
         Check(DouyinShortLink.Extract("确认" + Short).AbsoluteUri == Short, "Adjacent Chinese share text extraction");
+        Check(DouyinShortLink.Extract("抖音分享" + Short + "复制此链接").AbsoluteUri == Short,
+            "Chinese text touching both ends must be excluded from the share URL");
+        Check(DouyinShortLink.Extract("抖音分享" + Short.TrimEnd('/') + "复制此链接").AbsoluteUri == Short.TrimEnd('/'),
+            "Adjacent Chinese suffix must also work without a trailing slash");
         using (var client = new HttpClient(new Fixture("transient-details")))
             Check((await DouyinShortLink.ResolveAsync(client, new Uri(Short), CancellationToken.None)).Id == Id, "Missing details recover on bounded retry");
         foreach (var input in new[] { "https://v.douyin.com.evil.test/abc", "https://v.douyin.com@evil.test/abc",
-            "https://example.com/https://v.douyin.com/abc/", "https://v.douyin.com/abc/../../private", "https://www.douyin.com/video/" + Id })
+            "https://example.com/https://v.douyin.com/abc/", "https://v.douyin.com/abc/../../private", "https://v.douyin.com/abc/extra", "https://www.douyin.com/video/" + Id })
         {
             try { DouyinShortLink.Extract(input); throw new Exception("Invalid link accepted"); }
             catch (InvalidDataException) { }

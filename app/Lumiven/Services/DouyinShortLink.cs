@@ -15,7 +15,7 @@ public static class DouyinShortLink
 
     public static Uri Extract(string text)
     {
-        var match = Regex.Match(text, @"(?<![A-Za-z0-9_./@-])https://v\.douyin\.com/[A-Za-z0-9]+/?(?=$|[\s，。！；：、）】!?])",
+        var match = Regex.Match(text, @"(?<![A-Za-z0-9_./@-])https://v\.douyin\.com/[A-Za-z0-9]+/?(?=$|[\s\p{IsCJKUnifiedIdeographs}，。！；：、）】!?])",
             RegexOptions.IgnoreCase, TimeSpan.FromSeconds(1));
         if (!match.Success) throw new InvalidDataException(Localizer.T("请粘贴抖音 App 的视频分享短链接（https://v.douyin.com/…），或包含它的整段文案。"));
         return new Uri(match.Value);

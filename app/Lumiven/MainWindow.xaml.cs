@@ -38,6 +38,7 @@ public sealed partial class MainWindow : Window
     private readonly UISettings _uiSettings = new();
     private readonly CancellationTokenSource _lifetime = new();
     private readonly SemaphoreSlim _libraryLock = new(1, 1);
+    private readonly LibraryRefreshScheduler _libraryRefresh;
     private readonly IntPtr _hwnd;
     private readonly AppWindow _window;
     private FrameworkElement _page = null!;
@@ -49,6 +50,7 @@ public sealed partial class MainWindow : Window
     private MediaItem? _playing;
     private Image? _sourceCover;
     private MediaPlayer? _player;
+    private int _mediaOpenRequest;
     private int _performanceStep;
     private bool? _effectsEnabled;
     private string? _pendingTheme;
@@ -59,6 +61,7 @@ public sealed partial class MainWindow : Window
 
     public MainWindow()
     {
+        _libraryRefresh = new(RefreshLibraryCoreAsync);
         InitializeComponent();
         InitializeLanguageControls();
         _hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
@@ -178,6 +181,7 @@ public sealed partial class MainWindow : Window
         using var measurement = _performance.Measure("Navigate");
         string next = (string)((Button)sender).Tag;
         if (_pageName == next) return;
+        _mediaOpenRequest++;
         foreach (var progress in Descendants<SmoothProgressBar>(_page)) progress.Suspend();
         _page.Visibility = Visibility.Collapsed;
         _pageName = next;
@@ -385,9 +389,11 @@ public sealed partial class MainWindow : Window
         await ReloadLibraryAsync();
     });
 
-    private async Task ReloadLibraryAsync()
+    private Task ReloadLibraryAsync() => _libraryRefresh.RequestAsync();
+
+    private async Task RefreshLibraryCoreAsync()
     {
-        if (!await _libraryLock.WaitAsync(0)) return;
+        await _libraryLock.WaitAsync(_lifetime.Token);
         try
         {
             var records = await AppServices.Engine.GetDownloadedAsync();
@@ -431,6 +437,7 @@ public sealed partial class MainWindow : Window
 
     private void BatchSelect_Click(object sender, RoutedEventArgs e)
     {
+        _mediaOpenRequest++;
         if (_selectingMedia) MediaGrid.SelectedItems.Clear();
         _selectingMedia = !_selectingMedia;
         MediaGrid.SelectionMode = _selectingMedia ? ListViewSelectionMode.Multiple : ListViewSelectionMode.None;
@@ -576,8 +583,15 @@ public sealed partial class MainWindow : Window
     {
         if (_selectingMedia || e.ClickedItem is not MediaItem item) return;
         if (_performanceTest) { ShowNotice(Localizer.T("性能测试数据"), Localizer.T("此场景只测试界面响应，测试卡片不对应真实视频。"), InfoBarSeverity.Informational); return; }
-        if (item.IsMissing || !File.Exists(item.FilePath)) { ShowNotice(Localizer.T("文件已移走"), Localizer.T("请检查文件是否仍在原位置，或重新导入目录。"), InfoBarSeverity.Warning); return; }
-        await GuardAsync(() => OpenPlayerAsync(item));
+        int request = ++_mediaOpenRequest;
+        await GuardAsync(async () =>
+        {
+            bool exists = await Task.Run(() => File.Exists(item.FilePath), _lifetime.Token);
+            if (_exiting || request != _mediaOpenRequest || !FilteredMedia.Contains(item)) return;
+            item.IsMissing = !exists;
+            if (!exists) { ShowNotice(Localizer.T("文件已移走"), Localizer.T("请检查文件是否仍在原位置，或重新导入目录。"), InfoBarSeverity.Warning); return; }
+            await OpenPlayerAsync(item);
+        });
     }
 
     private void MediaMore_Click(object sender, RoutedEventArgs e)
@@ -679,11 +693,20 @@ public sealed partial class MainWindow : Window
         var connected = ConnectedAnimationService.GetForCurrentView().GetAnimation("openVideo");
         connected?.TryStart(PlayerCover);
         _player?.Dispose();
-        _player = new MediaPlayer { AutoPlay = true };
-        _player.MediaOpened += (_, _) => DispatcherQueue.TryEnqueue(() => PlayerCover.Visibility = Visibility.Collapsed);
-        _player.MediaFailed += (_, _) => DispatcherQueue.TryEnqueue(() => { PlayerCover.Visibility = Visibility.Collapsed; PlayerError.Text = Localizer.T("Windows 暂不支持此视频的编码。请使用右侧按钮在系统播放器中打开。"); });
-        VideoPlayer.SetMediaPlayer(_player);
-        _player.Source = MediaSource.CreateFromUri(new Uri(item.FilePath));
+        var player = _player = new MediaPlayer { AutoPlay = true };
+        player.MediaOpened += (_, _) => DispatcherQueue.TryEnqueue(() =>
+        {
+            if (!ReferenceEquals(_player, player)) return;
+            PlayerCover.Visibility = Visibility.Collapsed;
+        });
+        player.MediaFailed += (_, _) => DispatcherQueue.TryEnqueue(() =>
+        {
+            if (!ReferenceEquals(_player, player)) return;
+            PlayerCover.Visibility = Visibility.Collapsed;
+            PlayerError.Text = Localizer.T("Windows 暂不支持此视频的编码。请使用右侧按钮在系统播放器中打开。");
+        });
+        VideoPlayer.SetMediaPlayer(player);
+        player.Source = MediaSource.CreateFromUri(new Uri(item.FilePath));
         return Task.CompletedTask;
     }
 
@@ -691,6 +714,7 @@ public sealed partial class MainWindow : Window
 
     private void ClosePlayer()
     {
+        _mediaOpenRequest++;
         if (PlayerOverlay.Visibility != Visibility.Visible) return;
         SetFullscreen(false);
         _player?.Pause(); VideoPlayer.SetMediaPlayer(null); _player?.Dispose(); _player = null;
@@ -737,6 +761,7 @@ public sealed partial class MainWindow : Window
         if (_exiting) return;
         args.Cancel = true;
         if (_performanceTest) { _ = ExitAsync(); return; }
+        _mediaOpenRequest++;
         _player?.Pause();
         _window.Hide();
         _taskTimer.Stop();

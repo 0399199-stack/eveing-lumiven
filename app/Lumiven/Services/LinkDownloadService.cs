@@ -27,16 +27,28 @@ public sealed class LinkDownloadService(AppSettings settings, LibraryService lib
         List<DownloadTask> tasks;
         await using (var file = File.OpenRead(CachePath))
             tasks = await JsonSerializer.DeserializeAsync<List<DownloadTask>>(file, AppServices.JsonOptions) ?? [];
+        var completed = (await library.GetAllAsync()).Where(item => IsLinkTask(item.Id)).DistinctBy(item => item.Id)
+            .ToDictionary(item => item.Id, StringComparer.Ordinal);
         lock (_gate)
         {
             foreach (var task in tasks)
             {
-                if (task.Status is not ("completed" or "failed" or "interrupted" or "cancelled"))
+                // The library is committed before the task cache. Recover a completed save after a crash or cache-write failure.
+                if (task.Status != "completed" && completed.TryGetValue(task.Id, out var media))
+                {
+                    task.Status = "completed";
+                    task.Title = media.Title; task.Author = media.Author; task.Quality = media.Quality;
+                    task.FilePath = media.FilePath; task.BytesTotal = media.SizeBytes; task.BytesReceived = media.SizeBytes;
+                    task.Speed = 0; task.Error = ""; task.UpdatedAt = media.CompletedAt;
+                }
+                else if (task.Status is not ("completed" or "failed" or "interrupted" or "cancelled"))
                 {
                     task.Status = "interrupted";
                     task.Error = "上次下载已中断，请重新粘贴分享链接。";
+                    task.Speed = 0;
                 }
                 TranslatePendingTitle(task);
+                task.NormalizeProgress();
                 _tasks[task.Id] = task;
             }
         }
@@ -140,6 +152,22 @@ public sealed class LinkDownloadService(AppSettings settings, LibraryService lib
         finally { _cacheGate.Release(); }
     }
 
+    private async Task PublishFinalAsync(DownloadTask task)
+    {
+        task.UpdatedAt = DateTimeOffset.Now;
+        task.NormalizeProgress();
+        await _cacheGate.WaitAsync();
+        try
+        {
+            List<DownloadTask> snapshot;
+            lock (_gate) snapshot = _tasks.Values.Where(item => item.Id != task.Id).Select(Copy).Append(Copy(task)).ToList();
+            await AtomicJson.WriteAsync(CachePath, snapshot, AppServices.JsonOptions);
+            lock (_gate) _tasks[task.Id] = Copy(task);
+        }
+        finally { _cacheGate.Release(); }
+        TaskUpdated?.Invoke(this, Copy(task));
+    }
+
     private async Task RunAsync(DownloadTask task, Uri shortLink, CancellationTokenSource cancellation, bool xiaohongshu)
     {
         var token = cancellation.Token;
@@ -155,7 +183,10 @@ public sealed class LinkDownloadService(AppSettings settings, LibraryService lib
             using var http = ClientFactory();
             using var parseTimeout = CancellationTokenSource.CreateLinkedTokenSource(token);
             parseTimeout.CancelAfter(TimeSpan.FromSeconds(50));
-            var video = xiaohongshu ? await XiaohongshuLink.ResolveAsync(http, shortLink, parseTimeout.Token) : await DouyinShortLink.ResolveAsync(http, shortLink, parseTimeout.Token);
+            IReadOnlyList<LinkVideo> candidates = xiaohongshu
+                ? await XiaohongshuLink.ResolveCandidatesAsync(http, shortLink, parseTimeout.Token)
+                : [await DouyinShortLink.ResolveAsync(http, shortLink, parseTimeout.Token)];
+            var video = candidates[0];
             task.VideoId = video.Id; task.Title = video.Title; task.Author = video.Author; task.Quality = video.Quality;
             var directory = Path.GetFullPath(settings.DownloadDirectory);
             Directory.CreateDirectory(directory);
@@ -169,7 +200,9 @@ public sealed class LinkDownloadService(AppSettings settings, LibraryService lib
             await SaveAsync();
             using var downloadTimeout = CancellationTokenSource.CreateLinkedTokenSource(token);
             downloadTimeout.CancelAfter(TimeSpan.FromMinutes(30));
-            using var response = await VideoLinkHttp.GetAsync(http, video.Url, true, downloadTimeout.Token, xiaohongshu);
+            var selected = await VideoLinkHttp.OpenMediaAsync(http, candidates, downloadTimeout.Token, xiaohongshu);
+            using var response = selected.Response;
+            task.Quality = selected.Video.Quality;
             task.BytesTotal = response.Content.Headers.ContentLength ?? 0;
             await using (var source = await response.Content.ReadAsStreamAsync(downloadTimeout.Token))
             await using (var file = new FileStream(partial, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, true))
@@ -231,8 +264,16 @@ public sealed class LinkDownloadService(AppSettings settings, LibraryService lib
             try { if (partial is not null && File.Exists(partial)) File.Delete(partial); }
             catch (IOException ex) { AppServices.Log("清理链接临时文件", ex); }
             catch (UnauthorizedAccessException ex) { AppServices.Log("清理链接临时文件", ex); }
-            try { Publish(task); await SaveAsync(); }
-            catch (Exception ex) { AppServices.Log("保存链接任务", ex); }
+            try { await PublishFinalAsync(task); }
+            catch (Exception ex)
+            {
+                task.Error = task.Status == "completed"
+                    ? "视频已保存至媒体库，但任务记录保存失败。请刷新已下载页面；重启后会重新核对记录。"
+                    : "任务记录保存失败，重启后可能显示为中断。请检查磁盘空间与文件权限。";
+                task.Status = "failed";
+                Publish(task);
+                AppServices.Log("保存链接任务", ex);
+            }
             if (entered) _downloadGate.Release();
             lock (_gate) { _active.Remove(task.Id); cancellation.Dispose(); }
         }

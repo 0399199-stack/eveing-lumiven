@@ -52,11 +52,38 @@ internal static class VideoLinkHttp
             {
                 var status = (int)response.StatusCode;
                 response.Dispose();
-                throw new HttpRequestException(Localizer.T("视频平台请求未成功（HTTP {0}），请稍后重试。", status));
+                throw new HttpRequestException(Localizer.T("视频平台请求未成功（HTTP {0}），请稍后重试。", status), null, (HttpStatusCode)status);
             }
             return response;
         }
         throw new InvalidDataException(Localizer.T("分享链接跳转次数过多。"));
+    }
+
+    internal static async Task<(LinkVideo Video, HttpResponseMessage Response)> OpenMediaAsync(
+        HttpClient http, IReadOnlyList<LinkVideo> candidates, CancellationToken token, bool xiaohongshu, TimeSpan? headerTimeout = null)
+    {
+        Exception? failure = null;
+        foreach (var video in candidates.Take(8))
+        {
+            token.ThrowIfCancellationRequested();
+            using var headers = CancellationTokenSource.CreateLinkedTokenSource(token);
+            headers.CancelAfter(headerTimeout ?? TimeSpan.FromSeconds(30));
+            try
+            {
+                var response = await GetAsync(http, video.Url, true, headers.Token, xiaohongshu);
+                // No Range was requested. A partial response cannot stand in for the complete video.
+                if (response.StatusCode == HttpStatusCode.PartialContent)
+                {
+                    response.Dispose();
+                    failure = new InvalidDataException(Localizer.T("视频文件未下载完整，请重试。"));
+                    continue;
+                }
+                return (video, response);
+            }
+            catch (OperationCanceledException ex) when (!token.IsCancellationRequested && headers.IsCancellationRequested) { failure = ex; }
+            catch (HttpRequestException ex) { failure = ex; }
+        }
+        throw failure ?? new InvalidDataException(Localizer.T("视频平台暂未提供可用的视频响应，请稍后重试。"));
     }
 
     internal static async Task<string> ReadPageAsync(HttpResponseMessage response, CancellationToken token)

@@ -105,5 +105,7 @@
   "Lumiven 保存请求失败": "The Lumiven save request failed",
   "视频分片上传失败": "A video part could not be uploaded",
   "页面直连 HTTP {0}": "Direct page request: HTTP {0}",
-  "后端下载响应不是有效 JSON": "The download engine returned invalid JSON"
+  "后端下载响应不是有效 JSON": "The download engine returned invalid JSON",
+  "视频已保存至媒体库，但任务记录保存失败。请刷新已下载页面；重启后会重新核对记录。": "The video is saved in your library, but its task record could not be saved. Refresh Downloads; the records will be reconciled when the app restarts.",
+  "任务记录保存失败，重启后可能显示为中断。请检查磁盘空间与文件权限。": "The task record could not be saved and may appear interrupted after restarting. Check disk space and file permissions."
 }
