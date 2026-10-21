@@ -17,10 +17,10 @@
     <EnableMsixTooling>false</EnableMsixTooling>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Version>1.1.1</Version>
+    <Version>1.2.0</Version>
     <Company>EVEING</Company>
     <Product>EVEING Lumiven</Product>
-    <Description>免费的本地视频号下载与媒体管理软件</Description>
+    <Description>免费开源的视频号、抖音、小红书视频下载与媒体管理软件</Description>
     <Copyright>Copyright © 2026 EVEING. GPL-3.0-only.</Copyright>
   </PropertyGroup>
   <ItemGroup>

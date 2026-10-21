@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$Version = '1.1.1', [switch]$Installer, [switch]$SourceArchive, [switch]$SkipTests)
+param([string]$Version = '1.2.0', [switch]$Installer, [switch]$SourceArchive, [switch]$SkipTests)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 & (Join-Path $PSScriptRoot 'Verify-Licenses.ps1')
