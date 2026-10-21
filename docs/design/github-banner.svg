@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="300" viewBox="0 0 1200 300" role="img" aria-labelledby="title desc">
+  <title id="title">EVEING Lumiven</title>
+  <desc id="desc">Save. Organize. Revisit. Free and open source, made for Windows.</desc>
+  <defs>
+    <linearGradient id="backdrop" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#f8fafc"/><stop offset=".6" stop-color="#eff6fd"/><stop offset="1" stop-color="#fbfaf7"/>
+    </linearGradient>
+    <radialGradient id="halo"><stop stop-color="#aed8ff" stop-opacity=".5"/><stop offset="1" stop-color="#dcecff" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect x="1" y="1" width="1198" height="298" rx="24" fill="url(#backdrop)" stroke="#dce6f0"/>
+  <ellipse cx="1010" cy="180" rx="310" ry="235" fill="url(#halo)"/>
+  <path d="M780 298C920 200 1015 202 1198 50" fill="none" stroke="#fff" stroke-width="35" opacity=".45"/>
+  <path d="M905 298C1045 200 1110 202 1198 140" fill="none" stroke="#fff" stroke-width="2" opacity=".7"/>
+  <g transform="translate(66 82) scale(1.05)"><defs><linearGradient id="glass" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#F9FEFF" stop-opacity=".9"/><stop offset=".48" stop-color="#B6DBFF" stop-opacity=".7"/><stop offset="1" stop-color="#BCE9FF" stop-opacity=".48"/></linearGradient><linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#FFF"/><stop offset=".55" stop-color="#DAF4FF"/><stop offset="1" stop-color="#FFF"/></linearGradient><linearGradient id="l" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#BDDFFF"/><stop offset=".55" stop-color="#64ABEE"/><stop offset="1" stop-color="#A0D6FF"/></linearGradient></defs><rect x="5" y="5" width="118" height="118" rx="29" fill="#69B6ED" fill-opacity=".13"/><rect x="4" y="2" width="118" height="118" rx="29" fill="url(#glass)" stroke="url(#edge)" stroke-width="2"/><rect x="8" y="6" width="110" height="110" rx="26" fill="none" stroke="#FFF" stroke-opacity=".35"/><path d="M43 23C49 23 53 28 53 34V78L78 61C88 54 96 57 96 66V81C96 91 90 98 80 98H43C36 98 32 93 32 86V35C32 27 36 23 43 23Z" fill="url(#l)"/><path d="M53 42L90 64L53 86Z" fill="#F0FCFF" fill-opacity=".85"/><rect x="34" y="82" width="54" height="15" rx="7.5" fill="#D3EDFF" fill-opacity=".57" stroke="#F3FCFF" stroke-opacity=".55"/><path d="M12 54L113 109" stroke="#FFF" stroke-opacity=".2" stroke-width="20"/></g>
+  <g font-family="Segoe UI, Inter, Arial, sans-serif" fill="#153052">
+    <text x="235" y="82" font-size="14" letter-spacing="5" fill="#526f91">EVEING</text>
+    <text x="230" y="153" font-size="64" font-weight="600" letter-spacing="-2">Lumiven</text>
+    <text x="235" y="192" font-size="22" fill="#55718e">Save. Organize. Revisit.</text>
+    <text x="235" y="242" font-size="12" letter-spacing="2" fill="#647b95">FREE &amp; OPEN SOURCE</text>
+    <rect x="897" y="47" width="240" height="40" rx="20" fill="#fff" fill-opacity=".65" stroke="#fff"/>
+    <circle cx="924" cy="67" r="4" fill="#5795dc"/>
+    <text x="939" y="72" font-size="13" letter-spacing="1">MADE FOR WINDOWS</text>
+  </g>
+</svg>

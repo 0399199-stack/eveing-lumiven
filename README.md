@@ -1,57 +1,147 @@
-# EVEING Lumiven
+<div align="center">
 
-免费开源的 Windows 视频号、抖音、小红书视频下载与本地媒体管理软件。界面采用清透玻璃、圆角与轻层次设计；使用 [nobiyou/wx_channel](https://github.com/nobiyou/wx_channel) 的视频号下载与解密内核，提供 WinUI 桌面界面、统一任务记录和下载文件管理。
+![EVEING Lumiven — Save. Organize. Revisit.](docs/design/github-banner.svg)
 
-**V1.2.0 正式版。** 新增抖音、小红书视频解析下载，中英文、浅色/深色/跟随系统、视频号帮助和异常修复，以及软件内更新说明。[下载安装包与源码](https://github.com/0399199-stack/eveing-lumiven/releases/tag/v1.2.0)。实际验收与限制见 [验收记录](docs/VALIDATION.md)。
+**简体中文** · [English](README.en.md)
 
-![用户批准的媒体库设计参考](docs/design/approved-library.png)
+### 留下喜欢的视频，整理自己的媒体库。
 
-上图是用户批准的设计参考，**不是软件运行截图**。实际界面及运行验证另行记录。
+免费开源的 Windows 视频下载与管理工具。
 
-![实际 WinUI 窗口：1,000 条合成媒体记录的性能测试](docs/verification/runtime-performance-library.jpg)
+视频号 · 抖音 · 小红书，从下载到回看，在一个清透简洁的桌面界面中完成。
 
-上图为真实程序窗口，卡片内容是性能测试生成的占位记录，不代表真实微信下载结果。
+[![Latest release](https://img.shields.io/github/v/release/0399199-stack/eveing-lumiven?style=flat-square&color=4185d7&label=Release)](https://github.com/0399199-stack/eveing-lumiven/releases/latest) [![Windows 10 22H2 / 11 x64](https://img.shields.io/badge/Windows-10%2022H2%20%2F%2011%20x64-64748b?style=flat-square)](docs/WINDOWS10.md) [![GPL-3.0-only](https://img.shields.io/badge/License-GPL--3.0--only-64748b?style=flat-square)](LICENSE)
 
-## 使用方式
+**[下载 Windows 安装包](https://github.com/0399199-stack/eveing-lumiven/releases/latest)** &nbsp; · &nbsp; **[V1.2.0 更新说明](https://github.com/0399199-stack/eveing-lumiven/releases/tag/v1.2.0)** &nbsp; · &nbsp; **[使用帮助](#快速开始)**
 
-兼容目标为 Windows 10 22H2 x64（19045）与 Windows 11 x64；Windows 10 保留标题栏与透明背景降级。维护者已确认此前 Win10 版本可启动并正常使用，本次新增功能未在 Win10 实机完整复测。安装包包含 .NET 和 Windows App SDK 运行时，无需自行安装 Go 或 .NET。兼容范围及测试清单见 [Windows 10 兼容记录](docs/WINDOWS10.md)。
+</div>
 
-1. 安装 `EVEING-Lumiven-Setup-1.2.0-x64.exe`，启动普通权限桌面程序。
-2. 在首次启用微信下载时，阅读证书、HTTPS 处理及当前用户代理的说明；主动点击启用后，后台内核以当前用户权限运行。
-3. 打开电脑微信的视频号页面，使用注入的下载入口。软件显示任务与保存结果。
-4. 在“已下载”中预览、播放视频或定位文件；卡片右上角“…”可选择“仅删除记录”或“删除记录并删除本地文件”。后者会确认并永久删除当前视频，不经过回收站；文件已移走时也可清理记录。在设置中选择保存文件夹。
-5. 停止微信下载或退出软件时恢复之前的代理状态，并移除本次接入安装的证书。
+---
 
-下载抖音或小红书视频时，进入“视频解析”并选择对应平台，粘贴分享链接或整段分享文案后点击“解析并下载”；完成后在“已下载”中播放或定位。抖音目前支持 `v.douyin.com` 视频短链接；小红书支持视频笔记及分享短链接，图集、直播及受限作品不在此版本范围内。此功能不需要启用微信证书。
+## 一个界面，完成下载与回看
 
-安装器仅安装应用文件及用户选择的快捷方式，不安装驱动、不静默修改代理、不自动设置开机启动。卸载保留下载视频与应用数据；卸载前先停止微信下载。若微信不使用 WinInet 代理，或新版页面改变了原始流/注入接口，软件应显示具体连接失败，不能保证所有微信版本均兼容。
+| 下载 | 管理 | 使用体验 |
+| :--- | :--- | :--- |
+| **微信视频号** — 在微信视频号页面选择画质并下载，在 Lumiven 查看任务与结果。 | **本地媒体库** — 下载完成自动收录，按标题或作者搜索，重启后保留记录。 | **清透玻璃界面** — 浅色、深色、跟随系统，支持中文与英文。 |
+| **抖音与小红书** — 粘贴视频分享链接或整段分享文案，解析后直接保存。 | **播放与定位** — 内置播放、全屏、文件定位；不支持的编码可交给系统播放器。 | **GitHub 更新** — 自动检查、后台下载、SHA-256 校验，确认后安装。 |
+| **统一任务管理** — 查看进度与错误，已结束的解析记录可单独清理。 | **旧目录与批量整理** — 导入已有视频而不移动文件；删除记录默认保留视频。 | **视频号帮助** — 内置教程与“视频号异常修复”，处理本软件遗留的连接状态。 |
 
-删除记录后，刷新、自动扫描和旧任务通知不会让它重新出现；重新下载到同一位置的新任务可重新进入媒体库。原文件保留时仍可用资源管理器打开。媒体库索引会从旧数组迁移为包含条目和删除标记的对象；删除标记仅保留路径散列与时间，用于阻止自动扫描恢复，旧版本不能读取新索引，请勿用旧版覆盖新版本运行。
+### 支持哪些链接？
 
-工具栏“批量选择”可多选卡片、全选当前搜索结果，点击“删除记录”后默认保留本地视频；在确认框勾选“同时删除本地文件”才会永久删除视频。所选数量与删除对象在确认框中展示；部分文件被占用时继续处理其他项，保留失败记录。切换搜索或刷新会清空选择；“退出选择”恢复点击卡片播放。
+| 来源 | V1.2.0 支持范围 | 入口 |
+| :--- | :--- | :--- |
+| 微信视频号 | 电脑微信视频号页面中的视频；需先启用本地接入 | 视频号下载 |
+| 抖音 | `v.douyin.com` 视频分享短链接，可直接粘贴整段分享文案 | 视频解析 → 抖音 |
+| 小红书 | 视频笔记链接与分享短链接 | 视频解析 → 小红书 |
 
-## 软件更新
+优先保存平台可提供的无水印视频源，不抹除画面中已有的水印。本版不包含图集、直播录制或受限作品下载；平台页面、网络或访问限制发生变化时，解析可能失败。
 
-默认启动后从本项目 GitHub Release 检查并自动下载更高版本的正式版，校验完成后由你确认安装。1.1.0 / 1.1.1 用户可直接在软件内升级到 V1.2.0；1.2.0 起会展示新版功能说明。设置和关于页提供检查入口，设置中可关闭自动更新。更新保留视频与设置，有视频任务未完成时暂不安装。1.0.x 用户需要先手动安装本版。无需下载站或 GitHub 账号，详见 [更新说明](docs/UPDATES.md)。
+<details>
+<summary><strong>界面预览与设计参考</strong></summary>
 
-## 源码构建
+![Lumiven 媒体库设计参考](docs/design/approved-library.png)
 
-仓库使用固定工具链：.NET SDK 10.0.401、Go 1.27.1、Zig 0.13.0、Node 24.19.0（仅测试）、Inno Setup 6.5.4。下载 URL 与校验值位于 `scripts/toolchain.json`，不会下载 latest。Go CGO 通过固定 Zig C 编译器构建；安装工具链不等于安装应用。
+这是项目采用的界面设计参考，**不是软件运行截图**。
+
+![Lumiven 早期版本实际媒体库测试窗口](docs/verification/runtime-performance-library.jpg)
+
+这是早期版本的真实程序窗口，使用 1,000 条合成占位记录进行性能测试；不展示真实用户视频，也不代表 V1.2.0 的全部页面。实际验收范围见 [验收记录](docs/VALIDATION.md)。
+
+</details>
+
+## 下载与系统要求
+
+**[前往最新正式版 →](https://github.com/0399199-stack/eveing-lumiven/releases/latest)** 选择名称包含 `Setup` 的 `.exe` 安装包，例如 `EVEING-Lumiven-Setup-1.2.0-x64.exe`。
+
+| 项目 | 说明 |
+| :--- | :--- |
+| 系统 | Windows 10 22H2 x64（19045）或 Windows 11 x64；不支持更早 Win10、32 位或 ARM64 |
+| 运行环境 | 安装包自带 .NET 与 Windows App SDK，无需另装 Go 或 .NET |
+| 发布附件 | Windows 安装包、对应源码 ZIP、`SHA256SUMS` 校验文件 |
+| 升级与卸载 | 升级保留设置、下载记录与视频；卸载保留用户数据和下载视频 |
+
+**Windows 10 验证说明：** 此前兼容版本的基础使用已由维护者在实机确认；V1.2.0 新增功能尚未在 Win10 实机完整复测。标题栏和透明效果按系统能力降级，详见 [兼容记录](docs/WINDOWS10.md)。安装包目前未进行开发者代码签名。
+
+## 快速开始
+
+### 抖音 / 小红书
+
+1. 打开 **视频解析**，选择对应平台。
+2. 粘贴视频分享链接或整段分享文案，点击 **解析并下载**。
+3. 完成后进入 **已下载**，播放视频或打开所在文件夹。
+
+这两个平台的解析不需要启用微信接入或安装微信接入证书。
+
+### 微信视频号
+
+1. 在 **视频号下载** 中点击 **启用微信下载**，阅读本地证书、HTTPS 流量处理及当前用户代理说明；出现 Windows 证书提示时，请核对并自行确认。
+2. 重新打开电脑微信视频号，在视频页面出现的下载入口选择画质并下载。
+3. 在 Lumiven 查看任务，完成后进入 **已下载** 播放或定位文件。
+4. 使用结束后 **停止接入**。软件会恢复之前的代理状态并移除本次接入安装的证书；如有 Windows 确认提示，请完成确认。
+
+若视频号无法加载，可在设置中使用 **视频号异常修复**。它只处理 Lumiven 自己保存的连接状态，不重置其他软件的代理或删除其他证书。微信页面及代理使用方式可能随版本变化，不能保证所有微信版本都兼容。
+
+<details>
+<summary><strong>文件管理、删除与安装行为</strong></summary>
+
+- 在设置中选择保存文件夹；“导入旧目录”收录已有视频，不移动原文件。外部移走或删除的文件会标记为缺失。
+- 卡片菜单和批量选择支持删除记录，默认保留视频。只有明确选择同时删除本地文件并确认，才会永久删除视频，**不经过回收站**。文件被占用时保留失败记录。
+- 已删除记录不会因刷新、自动扫描或旧任务通知而重新出现；重新下载的新任务可重新收录。媒体库索引升级后旧版本不能读取，请勿用旧版覆盖运行。
+- 安装器仅安装应用文件及所选快捷方式，不安装驱动、不静默修改代理、不自动设置开机启动。卸载前请停止微信接入。
+
+</details>
+
+## 后续更新
+
+默认启动后从官方 GitHub Release 检查更高版本的正式版，并在后台下载；校验通过后，**由你确认安装**。设置和关于页提供手动检查入口，设置中可关闭自动更新。V1.2.0 起会展示新版功能说明。
+
+**V1.1.0 / V1.1.1 用户可直接在软件内升级。** V1.0.x 用户请先手动安装新版。安装前需完成下载并停止微信接入，无需 GitHub 账号。详见 [更新机制](docs/UPDATES.md)。
+
+## 开发与文档
+
+WinUI 3 桌面界面 · C# / .NET · 独立 Go 视频号内核
+
+| 文档 | 内容 |
+| :--- | :--- |
+| [构建说明](docs/BUILD.md) | 固定工具链、源码构建与打包 |
+| [更新记录](docs/RELEASE-NOTES.md) | 当前版本与历史变更 |
+| [验收记录](docs/VALIDATION.md) | 已验证结果与测试边界 |
+| [Windows 10 兼容说明](docs/WINDOWS10.md) | 系统要求及兼容验证范围 |
+| [组件与许可](THIRD-PARTY-NOTICES.md) | 上游来源、版本及许可证 |
+
+<details>
+<summary><strong>从源码构建</strong></summary>
+
+在 x64 Windows 11 上使用 PowerShell 7。固定工具链包括 .NET SDK 10.0.401、Go 1.27.1、Zig 0.13.0、Node 24.19.0（测试）及 Inno Setup 6.5.4；下载地址与校验值见 `scripts/toolchain.json`。
 
 ```powershell
 pwsh ./scripts/Prepare-Tools.ps1 -IncludeInstaller
 pwsh ./scripts/Verify-Licenses.ps1
 pwsh ./scripts/Build.ps1 -Installer
-# 在准确的待发布源码已提交、工作区干净后，重新构建并生成源码包及包含两者的 SHA256SUMS：
+# 对准确的已提交源码，在干净工作区生成对应源码包与校验文件：
 pwsh ./scripts/Build.ps1 -Installer -SourceArchive
 ```
 
-输出位于 `artifacts/release`：安装包、对应源码 ZIP、`SHA256SUMS`。构建细节与发布验收见 `docs/BUILD.md`。GitHub Actions 默认对 main 构建与测试；规范版本标签（例如 `v1.2.0`）的公开 Release 在验收后发布。安装包尚未进行代码签名。
+产物位于 `artifacts/release`。GitHub Actions 对 main 执行构建与必要测试；正式发布还需完成相应验收。完整步骤见 [构建说明](docs/BUILD.md)。
 
-## 开源与关于
+</details>
 
-EVEING 新增代码使用 GPL-3.0-only；继承的 wx_channel 文件保留 MIT 版权。Gopeed 为 GPL-3.0，SunnyNet 与其他组件保留各自许可证。完整文本见 `LICENSE`、`NOTICE`、`THIRD-PARTY-NOTICES.md` 和 `docs/licenses`。NetFilter SDK 商业驱动/API 不包含在本项目中，审计依据见 `docs/PROVENANCE.md`。
+## 开源致谢
 
-本软件由 EVEING 基于 GitHub 开源项目 wx_channel 开发，免费分享，不收费。感谢上游作者与开源贡献者。本项目与腾讯、微信及上游作者没有官方隶属关系。请在有权保存内容的场景中使用。
+视频号内核基于 [nobiyou/wx_channel](https://github.com/nobiyou/wx_channel)。抖音与小红书解析参考 [douyin-watermark-free-downloader](https://github.com/qgeng1465/douyin-watermark-free-downloader)、[parse-video](https://github.com/wujunwei928/parse-video) 和 [xhs-downloader](https://github.com/Andy-SoulShell/xhs-downloader)，在本项目中以 C# 适配实现。感谢上游作者与开源贡献者。
 
-联系：0399199@gmail.com
+EVEING 新增代码采用 **GPL-3.0-only**，继承的 wx_channel 文件保留 MIT 版权；Gopeed、SunnyNet 等组件遵循各自许可证。详见 [LICENSE](LICENSE)、[NOTICE](NOTICE)、[组件清单](THIRD-PARTY-NOTICES.md) 与 [来源审计](docs/PROVENANCE.md)。本项目不包含 NetFilter SDK 商业驱动/API，与相关平台及上游作者没有官方隶属关系。
+
+## 开发与免费声明
+
+本软件由 **EVEING** 开发与维护，官方版本免费提供，源代码公开。
+
+如您通过任何渠道付费购买本软件，请立即向销售方或交易平台申请退款。
+
+请通过官方 GitHub 仓库免费获取安装包及后续更新。
+
+请仅下载您拥有版权或已获授权的视频，遵守法律法规及平台规则，尊重著作权与个人隐私。
+
+**问题反馈：** [GitHub Issues](https://github.com/0399199-stack/eveing-lumiven/issues) · [0399199@gmail.com](mailto:0399199@gmail.com)
+
+请附上软件版本、系统版本、问题现象与复现步骤；不要提交密码、验证码、Cookie 或其他敏感信息。

@@ -1,4 +1,15 @@
-# V1.2.0 · 正式版
+# EVEING Lumiven V1.2.0 · 正式版
+
+**简体中文** · [English](https://github.com/0399199-stack/eveing-lumiven/blob/main/docs/RELEASE-NOTES.en.md) · [项目介绍](https://github.com/0399199-stack/eveing-lumiven)
+
+**三个视频来源，一个本地媒体库。**
+V1.2.0 新增抖音与小红书视频下载，带来中英文界面、主题切换和更清晰的软件更新说明。
+
+## 下载
+
+- [Windows x64 安装包](https://github.com/0399199-stack/eveing-lumiven/releases/download/v1.2.0/EVEING-Lumiven-Setup-1.2.0-x64.exe)：安装或升级软件。
+- [对应源码 ZIP](https://github.com/0399199-stack/eveing-lumiven/releases/download/v1.2.0/EVEING-Lumiven-Source-1.2.0.zip)：本次发布版本的完整对应源码。
+- [SHA256SUMS 校验文件](https://github.com/0399199-stack/eveing-lumiven/releases/download/v1.2.0/SHA256SUMS)：核对下载文件完整性。
 
 ## 新增功能
 
@@ -24,7 +35,11 @@
 - **1.1.0 / 1.1.1 用户**可在软件内检查更新；开启自动更新时启动后会检查并后台下载，校验完成后点击“安装更新”并确认向导。1.0.x 用户请手动安装本版。
 - 更新保留下载视频、设置和记录；安装前请完成下载并停止微信接入。安装包未进行开发者代码签名，附件提供 `SHA256SUMS` 完整性校验及对应源码。
 
-本软件由 EVEING 开发维护，官方版本免费提供、源代码公开。如通过任何渠道付费购买，请向销售方或交易平台申请退款。请仅保存您拥有版权或已获授权的内容。反馈邮箱：0399199@gmail.com。
+## 开发与免费声明
+
+本软件由 EVEING 开发与维护，官方版本免费提供，源代码公开。如您通过任何渠道付费购买本软件，请立即向销售方或交易平台申请退款。请通过官方 GitHub 仓库免费获取安装包及后续更新。
+
+请仅保存您拥有版权或已获授权的内容。反馈邮箱：0399199@gmail.com。
 
 ---
 
